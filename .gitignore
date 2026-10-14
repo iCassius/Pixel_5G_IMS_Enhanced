@@ -1,0 +1,13 @@
+/private/
+/dist/
+/build/
+__pycache__/
+*.pyc
+*.dex
+*.class
+*.zip
+*.db
+*.pb
+*.dat
+*.apk
+*.log

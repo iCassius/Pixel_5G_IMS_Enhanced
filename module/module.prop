@@ -1,0 +1,6 @@
+id=EnablePixel5G
+name=Pixel IMS / China Carrier Enabler
+version=v2.6.0-experimental
+versionCode=26
+author=iCassius (original module: Sun_Dream)
+description=China IMS/VoNR/SA framework fallback; audited mustang-only modem patch. Original PixelVo5G Enabler for Global v1.1 by Sun_Dream.

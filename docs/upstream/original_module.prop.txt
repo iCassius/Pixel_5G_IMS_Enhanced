@@ -1,0 +1,6 @@
+id=EnablePixel5G
+name=PixelVo5G Enabler for Global
+version=v1.1
+versionCode=10
+author=Sun_Dream
+description=Pixel56789TenVoLTE+VoNR for Global
