@@ -1,6 +1,6 @@
 {
-  "version": "v2.6.2-experimental",
-  "versionCode": 28,
-  "zipUrl": "https://github.com/iCassius/Pixel_5G_IMS_Enhanced/releases/download/v2.6.2-experimental/Pixel_5G_IMS_Enhanced-v2.6.2-experimental-framework.zip",
-  "changelog": "https://github.com/iCassius/Pixel_5G_IMS_Enhanced/releases/download/v2.6.2-experimental/CHANGELOG.md"
+  "version": "v2.6.2",
+  "versionCode": 29,
+  "zipUrl": "https://github.com/iCassius/Pixel_5G_IMS_Enhanced/releases/download/v2.6.2/Pixel_5G_IMS_Enhanced-v2.6.2.zip",
+  "changelog": "https://raw.githubusercontent.com/iCassius/Pixel_5G_IMS_Enhanced/updates/release-notes.md"
 }
