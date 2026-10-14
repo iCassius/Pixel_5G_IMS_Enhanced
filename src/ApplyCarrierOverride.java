@@ -174,7 +174,8 @@ public final class ApplyCarrierOverride {
                     policy.getString("mcc").equals(info.getMccString()) && policy.getString("mnc").equals(info.getMncString());
                 PersistableBundle desired;
                 if(fullTarget) {
-                    desired=bundle(policy.getJSONObject("common"));desired.putAll(bundle(policy.getJSONObject(profile)));
+                    desired=fallback(actual);
+                    desired.putAll(bundle(policy.getJSONObject("common")));desired.putAll(bundle(policy.getJSONObject(profile)));
                     if(!cdma.equals("keep"))desired.putBoolean("support_cdma_1x_voice_calls_bool",cdma.equals("enable"));
                 } else desired=fallback(actual);
                 boolean wrote=false;
