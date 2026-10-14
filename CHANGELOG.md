@@ -1,5 +1,12 @@
 # 变更记录
 
+## v2.6.1-experimental — 2026-10-14 — iCassius
+
+- 增加 KernelSU 原生更新源及操作按钮，按钮打开 GitHub Releases。
+- 各安装包独立更新渠道，避免框架／mustang Base／VCRBT 互相替换。
+- 从 module.prop 统一生成版本、下载链接、更新描述文件及 Release 校验文件。
+- 保留用户修改的 README，未改写现有描述。
+
 ## v2.6.0-experimental — 2026-10-14 — iCassius
 
 - 从 v2.5 拆出独立 PixelIMS 项目，保留 Sun_Dream 原始署名、模块 ID、历史阶段署名。

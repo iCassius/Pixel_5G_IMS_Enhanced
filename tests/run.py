@@ -11,7 +11,7 @@ def check(name,value):
     if not value:raise AssertionError(name)
 def execute(path,env,*args):
     directory=path.parent.parent/'bin';posix=directory.as_posix();posix='/'+posix[0].lower()+posix[2:] if os.name=='nt' else posix
-    return subprocess.run([str(BASH),'-c','export PATH="$1:$PATH"; shift; sh "$@"','fixtures',posix,path.as_posix(),*args],env=env,capture_output=True,text=True)
+    return subprocess.run([str(BASH),'-c','export PATH="$1:$PATH"; shift; sh "$@"','fixtures',posix,path.as_posix(),*args],env=env,capture_output=True,text=True,encoding='utf-8',errors='replace')
 def fixture(work):
     mod=work/'module';shutil.copytree(ROOT/'module',mod)
     # Synthetic bytes suffice for mount control-flow tests; no proprietary data required.
@@ -49,6 +49,9 @@ echo "su $*" >> "$ACTIONS"
 [ "$SU_FAIL" = 1 ] && exit 1
 echo '{"subscriptions":[],"targetCount":0}'
 ''')
+    write(bin/'am','#!/bin/sh\necho "am $*" >> "$ACTIONS"\n[ "$AM_FAIL" != 1 ]\n')
+    write(mod/'update-repository','iCassius/PixelIMS\n')
+    write(mod/'action.sh',(mod/'action.sh').read_text(encoding='utf-8').replace('/system/bin/am',(bin/'am').as_posix()))
     env=dict(os.environ,INFO=info.as_posix(),ACTIONS=actions.as_posix())
     script=(mod/'post-fs-data.sh').read_text(encoding='utf-8').replace('/proc/self/mountinfo',info.as_posix()).replace('/dev/enable_pixel_5g',(work/'mirror').as_posix())
     table=[]
@@ -104,12 +107,29 @@ def main():
                 check('control '+name,result.returncode==0 and (mod/'profile.conf').read_text()==('base\n' if name=='status' else 'vcrbt\n'))
                 if name=='status':check('status read flag','--status' in actions.read_text())
             else:check('control '+name,result.returncode!=0 and (mod/'profile.conf').read_text()=='base\n' and (not name.startswith('corrupt') or not actions.read_text()))
+    for name in ('open releases','browser unavailable','invalid repository'):
+        with tempfile.TemporaryDirectory(prefix='pixelims-action-test-') as temp:
+            mod,env,actions,info=fixture(pathlib.Path(temp))
+            if name=='browser unavailable':env['AM_FAIL']='1'
+            if name=='invalid repository':write(mod/'update-repository','owner/repo;bad\n')
+            result=execute(mod/'action.sh',env)
+            if name=='open releases':check(name,result.returncode==0 and 'https://github.com/iCassius/PixelIMS/releases' in actions.read_text() and 'su ' not in actions.read_text())
+            else:check(name,result.returncode!=0 and (name!='invalid repository' or not actions.read_text()))
+    current=dict(line.split('=',1) for line in (ROOT/'module/module.prop').read_text(encoding='utf-8').splitlines() if '=' in line)
     for archive in (ROOT/'dist').glob('*.zip'):
         with zipfile.ZipFile(archive) as zipped:
             check(archive.name+' LF scripts',all(b'\r' not in zipped.read(n) for n in zipped.namelist() if n.endswith('.sh')))
             if 'framework' in archive.name:check('default no proprietary payload',not any(n.startswith(('vendor_override/','product_override/')) for n in zipped.namelist()))
             manifest=json.loads(zipped.read('manifest.json'))
             check(archive.name+' manifest hashes',all(hashlib.sha256(zipped.read(n)).hexdigest()==v['sha256'] for n,v in manifest['outputs'].items()))
+            if manifest['module_version']==current['version']:
+                props=dict(line.split('=',1) for line in zipped.read('module.prop').decode().splitlines() if '=' in line)
+                label=archive.name.removeprefix('PixelIMS-'+current['version']+'-').removesuffix('.zip')
+                update=json.loads((ROOT/'dist'/('update-'+label+'.json')).read_text(encoding='utf-8'))
+                check(label+' update channel',props['updateJson'].endswith('/update-'+label+'.json'))
+                check(label+' update version',update['version']==props['version'] and update['versionCode']==int(props['versionCode']))
+                check(label+' release asset',update['zipUrl'].endswith('/'+props['version']+'/'+archive.name))
+                check(label+' action included','action.sh' in zipped.namelist() and zipped.read('update-repository')==b'iCassius/PixelIMS\n')
     out=ROOT/'build';out.mkdir(exist_ok=True)
     write(out/'validation.json',json.dumps({'evidence':'Pure Java and Windows Git Bash mock fixtures; not Android Binder/SELinux/device validation','results':results,'all_passed':True},indent=2))
     print('Checks:',len(results),'passed')

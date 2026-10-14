@@ -1,5 +1,5 @@
 """Build standalone source; optional private payloads are never required or published by default."""
-import argparse, hashlib, json, os, pathlib, shutil, subprocess, tempfile, zipfile
+import argparse, hashlib, json, os, pathlib, re, shutil, subprocess, tempfile, zipfile
 ROOT=pathlib.Path(__file__).resolve().parent
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def write(path,text):path.write_text(text,encoding='utf-8',newline='\n')
@@ -7,12 +7,23 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--with-private-payload',action='store_true')
     parser.add_argument('--profile',choices=['base','vcrbt'],default='base')
+    parser.add_argument('--update-repository',default='iCassius/PixelIMS')
     args=parser.parse_args()
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',args.update_repository):
+        parser.error('Expected GitHub owner/repository')
+    props=dict(line.split('=',1) for line in (ROOT/'module/module.prop').read_text(encoding='utf-8').splitlines() if '=' in line)
+    version=props['version'];version_code=int(props['versionCode'])
+    if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?',version) or version_code<=0:
+        parser.error('Invalid module version/versionCode')
+    label='private-mustang-'+args.profile if args.with_private_payload else 'framework'
     sdk=pathlib.Path(os.environ.get('ANDROID_SDK_ROOT',str(pathlib.Path.home()/'AppData/Local/Android/Sdk')))
     jdk=pathlib.Path(os.environ.get('JAVA_HOME',r'C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot'))/'bin'
     jar=sdk/'platforms/android-36.1/android.jar';d8=sdk/'build-tools/35.0.0/d8.bat'
     with tempfile.TemporaryDirectory(prefix='pixelims-build-') as temp:
         work=pathlib.Path(temp);mod=work/'module';shutil.copytree(ROOT/'module',mod)
+        props['updateJson']='https://github.com/'+args.update_repository+'/releases/latest/download/update-'+label+'.json'
+        write(mod/'module.prop',''.join(key+'='+value+'\n' for key,value in props.items()))
+        write(mod/'update-repository',args.update_repository+'\n')
         classes=work/'classes';classes.mkdir()
         subprocess.run([str(jdk/'javac.exe'),'-encoding','UTF-8','-source','8','-target','8','-cp',str(jar),'-d',str(classes),*[str(p) for p in sorted((ROOT/'src').glob('*.java'))]],check=True)
         subprocess.run([str(d8),'--min-api','31','--lib',str(jar),'--output',str(classes),*[str(p) for p in classes.glob('*.class')]],check=True)
@@ -46,17 +57,20 @@ def main():
         write(mod/'full-files.tsv',''.join(path+' '+','.join(hashes)+'\n' for path,hashes in policy['full_files'].items()))
         write(mod/'profile.conf',args.profile+'\n')
         shutil.copy2(ROOT/'NOTICE.md',mod/'NOTICE.md')
-        manifest={'module_version':'v2.6.0-experimental','maintainer':'iCassius','original_author':'Sun_Dream',
+        manifest={'module_version':version,'maintainer':'iCassius','original_author':'Sun_Dream',
             'payload':'private-mustang' if args.with_private_payload else 'framework-only','outputs':{}}
         for path in sorted(mod.rglob('*')):
             if path.is_file():manifest['outputs'][path.relative_to(mod).as_posix()]={'sha256':sha(path),'size_bytes':path.stat().st_size}
         write(mod/'manifest.json',json.dumps(manifest,indent=2)+'\n')
         out=ROOT/'dist';out.mkdir(exist_ok=True)
-        label='private-mustang-'+args.profile if args.with_private_payload else 'framework'
-        archive=out/('PixelIMS-v2.6.0-'+label+'.zip')
+        archive=out/('PixelIMS-'+version+'-'+label+'.zip')
         with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as result:
             for path in sorted(mod.rglob('*')):
                 if path.is_file():result.write(path,path.relative_to(mod).as_posix())
         write(out/(archive.name+'.sha256'),sha(archive)+'  '+archive.name+'\n')
+        release='https://github.com/'+args.update_repository+'/releases/download/'+version+'/'
+        update={'version':version,'versionCode':version_code,'zipUrl':release+archive.name,'changelog':release+'CHANGELOG.md'}
+        write(out/('update-'+label+'.json'),json.dumps(update,ensure_ascii=False,indent=2)+'\n')
+        shutil.copy2(ROOT/'CHANGELOG.md',out/'CHANGELOG.md')
         print(archive)
 if __name__=='__main__':main()
