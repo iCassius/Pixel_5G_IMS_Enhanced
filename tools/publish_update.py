@@ -6,10 +6,9 @@ def validate(update,repo,tag,asset_names):
     if update.get('version')!=tag or type(update.get('versionCode')) is not int or update['versionCode']<=0:
         raise ValueError('Invalid release version')
     prefix='https://github.com/'+repo+'/releases/download/'+tag+'/'
-    for key in ('zipUrl','changelog'):
-        url=update.get(key,'')
-        if not url.startswith(prefix) or url[len(prefix):] not in asset_names:raise ValueError('Release asset missing: '+key)
-    if not update['zipUrl'].endswith('-framework.zip'):raise ValueError('Public feed accepts only framework packages')
+    expected='Pixel_5G_IMS_Enhanced-'+tag+'.zip'
+    if update.get('zipUrl')!=prefix+expected or expected not in asset_names:raise ValueError('Public ZIP asset missing or incorrect')
+    if update.get('changelog')!='https://raw.githubusercontent.com/'+repo+'/updates/release-notes.md':raise ValueError('Invalid update notes URL')
 def api(path,method='GET',data=None,missing=False):
     cmd=['gh','api',path]
     if method!='GET':cmd+=['--method',method]
@@ -33,6 +32,12 @@ def main():
     if remote is None:
         repository=api(prefix);branch=api(prefix+'/git/ref/heads/'+repository['default_branch'])
         api(prefix+'/git/refs','POST',{'ref':'refs/heads/updates','sha':branch['object']['sha']})
+    notes=api(prefix+'/contents/release-notes.md?ref=updates',missing=True)
+    notes_data={'message':'Update release notes for '+args.tag,'branch':'updates',
+        'content':base64.b64encode((ROOT/'docs/RELEASE_NOTES.md').read_bytes()).decode(),
+        'author':{'name':'iCassius','email':'6694980+iCassius@users.noreply.github.com'}}
+    if notes is not None:notes_data['sha']=notes['sha']
+    api(prefix+'/contents/release-notes.md','PUT',notes_data)
     existing=api(prefix+'/contents/update-framework.json?ref=updates',missing=True)
     data={'message':'Update framework feed to '+args.tag,'branch':'updates',
         'content':base64.b64encode((json.dumps(update,indent=2)+'\n').encode()).decode(),

@@ -8,8 +8,8 @@
 
 每次发布先提高 module/module.prop 的 versionCode，修改 version 和 CHANGELOG，再构建。
 构建以 module.prop 为唯一版本来源，生成对应 ZIP、SHA256 和 update-<渠道>.json。
-Release 标签必须等于模块 version；上传对应 ZIP、update JSON、CHANGELOG.md 和 SHA256。
-发布附件 CHANGELOG.md 使用 docs/RELEASE_NOTES.md 的功能及实机记录；来源说明保留在 docs/COMPATIBILITY.md。
+Release 标签必须等于模块 version，只上传 Pixel_5G_IMS_Enhanced-<版本>.zip。
+update JSON 和中文更新说明放在 updates 分支，SHA256 仅本地／CI 保留；来源说明保留在 docs/COMPATIBILITY.md。
 
 | 构建 | 更新描述文件 |
 |---|---|
@@ -23,7 +23,7 @@ GitHub Actions 仅在 v* 标签匹配 module.prop 且构建／检查通过后发
 更新源拒绝版本号倒退或同一 versionCode 指向不同版本；已匹配的重试不改写。
 私有基带渠道不自动发布；没有对应更新源文件时不会误装框架包。
 框架资产在 dist/release/<版本>/；基带资产在 dist/private/<版本>/，公开 workflow 只上传前者。
-v2.6.2-experimental 已发布为预发布，远端构建与发布流程成功，框架更新源已上线。
+v2.6.2 为正式发布，versionCode 29；文件名 Pixel_5G_IMS_Enhanced-v2.6.2.zip。
 仓库私有时管理器无法匿名下载，需手动获取包或提供可公开访问的独立分发仓库。
 
 官方定义：https://kernelsu.org/guide/module.html 。安装升级后原有机型／基带守卫仍会运行。

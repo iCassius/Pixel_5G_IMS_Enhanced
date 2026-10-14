@@ -1,4 +1,4 @@
-# Pixel_5G_IMS_Enhanced v2.6.2 实验版
+# Pixel_5G_IMS_Enhanced v2.6.2
 
 ## 功能
 

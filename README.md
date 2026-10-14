@@ -1,7 +1,7 @@
 # Pixel_5G_IMS_Enhanced
 
 基于 Sun_Dream 的 PixelVo5G Enabler for Global v1.1 优化，维护者 iCassius。
-当前版本：v2.6.2 实验版。
+当前版本：v2.6.2。
 
 ## 原模块基础与问题
 

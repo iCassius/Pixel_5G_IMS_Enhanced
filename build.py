@@ -65,7 +65,7 @@ def main():
         write(mod/'manifest.json',json.dumps(manifest,indent=2)+'\n')
         out=ROOT/'dist'/('private' if args.with_private_payload else 'release')/version
         out.mkdir(parents=True,exist_ok=True)
-        archive=out/(props['name']+'-'+version+'-'+label+'.zip')
+        archive=out/(props['name']+'-'+version+('-'+label if args.with_private_payload else '')+'.zip')
         with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as result:
             for path in sorted(mod.rglob('*')):
                 if path.is_file():
@@ -75,7 +75,7 @@ def main():
                     result.writestr(entry,path.read_bytes())
         write(out/(archive.name+'.sha256'),sha(archive)+'  '+archive.name+'\n')
         release='https://github.com/'+args.update_repository+'/releases/download/'+version+'/'
-        update={'version':version,'versionCode':version_code,'zipUrl':release+archive.name,'changelog':release+'CHANGELOG.md'}
+        update={'version':version,'versionCode':version_code,'zipUrl':release+archive.name,'changelog':'https://raw.githubusercontent.com/'+args.update_repository+'/updates/release-notes.md'}
         write(out/('update-'+label+'.json'),json.dumps(update,ensure_ascii=False,indent=2)+'\n')
         shutil.copy2(ROOT/'docs/RELEASE_NOTES.md',out/'CHANGELOG.md')
         print(archive)

@@ -69,10 +69,11 @@ echo '{"subscriptions":[],"targetCount":0}'
     for p in bin.iterdir():p.chmod(0o755)
     return mod,env,actions,info
 def main():
-    repo='iCassius/Pixel_5G_IMS_Enhanced';tag='v2.6.2-experimental'
+    repo='iCassius/Pixel_5G_IMS_Enhanced';tag='v2.6.2'
     prefix='https://github.com/'+repo+'/releases/download/'+tag+'/'
-    metadata={'version':tag,'versionCode':28,'zipUrl':prefix+'test-framework.zip','changelog':prefix+'CHANGELOG.md'}
-    validate_update(metadata,repo,tag,{'test-framework.zip','CHANGELOG.md'})
+    public_name='Pixel_5G_IMS_Enhanced-'+tag+'.zip'
+    metadata={'version':tag,'versionCode':29,'zipUrl':prefix+public_name,'changelog':'https://raw.githubusercontent.com/'+repo+'/updates/release-notes.md'}
+    validate_update(metadata,repo,tag,{public_name})
     check('release metadata valid',True)
     for name,patch,assets in [('foreign URL',{'zipUrl':'https://other.invalid/test.zip'},{'test-framework.zip','CHANGELOG.md'}),
         ('missing asset',{}, {'CHANGELOG.md'}),('private payload',{'zipUrl':prefix+'test-private.zip'},{'test-private.zip','CHANGELOG.md'}),
@@ -133,17 +134,17 @@ def main():
             else:check(name,result.returncode!=0 and (name!='invalid repository' or not actions.read_text()))
     current=dict(line.split('=',1) for line in (ROOT/'module/module.prop').read_text(encoding='utf-8').splitlines() if '=' in line)
     archives=list((ROOT/'dist/release'/current['version']).glob('*.zip'))+list((ROOT/'dist/private'/current['version']).glob('*.zip'))
-    check('current release package exists',any('framework.zip' in p.name for p in archives))
+    check('current release package exists',any(p.name==current['name']+'-'+current['version']+'.zip' for p in archives))
     for archive in archives:
         with zipfile.ZipFile(archive) as zipped:
             check(archive.name+' LF scripts',all(b'\r' not in zipped.read(n) for n in zipped.namelist() if n.endswith('.sh')))
-            if 'framework' in archive.name:check('default no proprietary payload',not any(n.startswith(('vendor_override/','product_override/')) for n in zipped.namelist()))
+            if '/release/' in archive.as_posix():check('default no proprietary payload',not any(n.startswith(('vendor_override/','product_override/')) for n in zipped.namelist()))
             manifest=json.loads(zipped.read('manifest.json'))
             check(archive.name+' manifest hashes',all(hashlib.sha256(zipped.read(n)).hexdigest()==v['sha256'] for n,v in manifest['outputs'].items()))
             if manifest['module_version']==current['version']:
                 props=dict(line.split('=',1) for line in zipped.read('module.prop').decode().splitlines() if '=' in line)
                 check('module display name',props['name']==current['name'])
-                label=archive.name.removeprefix(current['name']+'-'+current['version']+'-').removesuffix('.zip')
+                label='framework' if manifest['payload']=='framework-only' else 'private-mustang-'+zipped.read('profile.conf').decode().strip()
                 update=json.loads((archive.parent/('update-'+label+'.json')).read_text(encoding='utf-8'))
                 check(label+' update channel',props['updateJson'].endswith('/update-'+label+'.json'))
                 check(label+' update version',update['version']==props['version'] and update['versionCode']==int(props['versionCode']))
