@@ -16,4 +16,3 @@ Pixel 10 实测未生效，缺少 g5400i 基带策略适配和电信 IMS APN 定
 - 提供 VoLTE、VoWiFi、SA／NSA、VoNR 配置。
 - 配置读回、定期检查、Base／VCRBT 切换及挂载失败回滚。
 - KernelSU 更新入口及 GitHub Releases 操作按钮。
-
