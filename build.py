@@ -55,7 +55,7 @@ def main():
             for directory in ('vendor_override','product_override'):
                 shutil.copytree(private/args.profile/directory,mod/directory)
         write(mod/'policy.json',json.dumps(policy,ensure_ascii=False,indent=2)+'\n')
-        write(mod/'full-files.tsv',''.join(path+' '+','.join(hashes)+'\n' for path,hashes in policy['full_files'].items()))
+        write(mod/'full-files.tsv',''.join(('vendor' if path.startswith('/vendor/') else 'product')+' '+path+' '+','.join(hashes)+'\n' for path,hashes in policy['full_files'].items()))
         write(mod/'profile.conf',args.profile+'\n')
         shutil.copy2(ROOT/'docs/COMPATIBILITY.md',mod/'COMPATIBILITY.md')
         manifest={'module_version':version,'maintainer':'iCassius','original_author':'Sun_Dream',

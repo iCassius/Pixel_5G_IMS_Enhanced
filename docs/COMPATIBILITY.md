@@ -17,19 +17,21 @@
 |---|---|---|
 | carrier_volte_available_bool | AOSP VoLTE 可用性，API 23 | 已识别国内订阅且实际值为 Boolean 才写 true |
 | carrier_wfc_ims_available_bool | AOSP VoWiFi 可用性，API 23 | 同上；不改用户开关、默认路由或漫游模式 |
-| carrier_nr_availabilities_int_array | AOSP SA／NSA 可用性，API 31 | 必须存在且为 int[]，仅含已知枚举或空数组；写 [1,2] |
-| vonr_enabled_bool | AOSP VoNR 启用，API 34 | API 34+ 且实际值为 Boolean |
-| vonr_on_by_default_bool | AOSP VoNR 默认用户偏好，API 34 | 同上；不保证覆盖既有用户选择 |
-| vonr_setting_visibility_bool | AOSP VoNR 菜单，API 34 | 同上 |
+| carrier_nr_availabilities_int_array | AOSP SA／NSA 可用性 | 必须存在且为 int[]，仅含已知枚举或空数组；写 [1,2] |
+| vonr_enabled_bool | AOSP VoNR 启用 | 实际值为 Boolean 才写 true，接受厂商回移实现 |
+| vonr_on_by_default_bool | AOSP VoNR 默认用户偏好 | 同上；不保证覆盖既有用户选择 |
+| vonr_setting_visibility_bool | AOSP VoNR 菜单 | 同上 |
 
 来源：[Android CarrierConfigManager 官方定义](https://developer.android.com/reference/android/telephony/CarrierConfigManager)。
 配置键共用是 API／语义层判断，不是基带硬件、网络开通、IMS 注册或真实呼叫兼容证明。
 没有对应键或类型异常就跳过，不制造 false，不写厂商同名替代键。空策略不发 Binder 写入。
 
-## 仅当前 Pixel 10 基线
+## 挂载的最小依赖
 
-- 机型 mustang、系统 CP3A.260905.009、基带 g5400i-260604-260807-B-16035863；必须精确匹配且四项文件哈希在登记集合中。
-- cfg.db、open_carrier_info.dat、others.pb、default.pb：全部按同一完整基线门控，任意一项不匹配均零挂载。
+- vendor 组：必须携带专用载荷，基带为 g5400i-260604-260807-B-16035863，且 cfg.db／open_carrier_info.dat 两项目标哈希均在登记集合中。不要求 Android 版本、build ID 或 mustang 机型码相同。
+- 基带属性按逗号拆分并去除首尾空白；允许双卡重复的相同版本，拒绝空槽值、未知值和混合版本。
+- product 组：基带符合，加上 mustang／CP3A.260905.009 的 product 配置范围，以及 others.pb／default.pb 两项哈希。该组与 vendor 独立选择，不能用基带版本代替 PB 内容基线。
+- 任意组不匹配就跳过该组；已选择节点必须全部预检成功才挂载，失败保留原有逆序回滚机制。
 - imsvt.*、vendor.ims.*、视频 QoS／SDP／音频彩铃防降级、电信 IMS APN 和网络显示阈值不推广。
 - 基带早期报告值 g5400i-250605-250825-B-13984049 与后续呼叫日志不一致，旧值不加入许可名单。
 - 所谓“完整策略”仅电信 carrierId 2237／46011 使用持久 Binder 配置；其他国内订阅使用框架兜底。
@@ -51,7 +53,8 @@ profile=vcrbt 在兜底模式只使用 framework 策略，不加载视频实验�
 
 ## 设备验证矩阵
 
-Pixel 6～11 为需求目标，当前框架入口接受 Google 型号名称及 API 31～36；没有逐代实机验收。
-Pixel 11 的名称仅预留，Android 17／API 37 未审核，当前停止安装／写入，等待实际基线后适配。
+Pixel 6～11 为需求目标，框架入口接受 Google 型号名称，保留 DEX 编译所需的 API 31 下限，不设置 Android API 上限。
+运行时通过 Binder 真实枚举订阅、读取已识别 CarrierConfig，按实际键类型选择参数。写入要求覆盖接口可用、目标 SIM 已加载、通话空闲，再读回核验。接口或权限不满足时不写，不以 API 数字猜测能力。
+2026-10-15 已在本机 API 37 验证安装前检查、双卡基带归一化、六项参数只读获取和空闲状态接口；这些记录不是实际写入、挂载或重启验收。
 v2.6 Java 编译、DEX 构建、纯规则测试、shell 模拟和 ZIP 检查属于离线证据。
 还需逐机型／运营商测试 IMS 注册、SA／NSA、VoLTE／VoNR／VoWiFi、双卡、海外卡、冷启动、SIM 切换、OTA、禁用后的行为。

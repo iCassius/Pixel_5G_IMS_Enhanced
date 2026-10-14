@@ -1,8 +1,8 @@
 #!/system/bin/sh
 # ==============================================================================
-# EnablePixel5G v2.6.0-experimental - KernelSU / Magisk Early Boot Mount Script
-# Target Device : Google Pixel 10 Pro XL (mustang / Exynos Modem 5400i g5400i)
-# Target Build  : Android 16 (CP3A.260905.009)
+# Pixel_5G_IMS_Enhanced - KernelSU / Magisk Early Boot Mount Script
+# Vendor profile: audited g5400i modem and vendor file hashes
+# Product profile: independently audited mustang CarrierSettings baseline
 # Note          : /dev mirror is an isolated workaround for namespace-specific unmounts
 # ==============================================================================
 
@@ -30,8 +30,13 @@ if ! pixel_framework_eligible; then
     log_msg "[SKIP] Unsupported platform; no mounts or policy writes."
     exit 0
 fi
-if ! pixel_full_identity || ! pixel_full_files; then
-    log_msg "[FRAMEWORK ONLY] Unknown modem/build/file baseline; skipping ALL vendor and product mounts."
+VENDOR_READY=0
+PRODUCT_READY=0
+if pixel_vendor_identity && pixel_files_compatible vendor; then VENDOR_READY=1; fi
+if pixel_product_identity && pixel_files_compatible product; then PRODUCT_READY=1; fi
+log_msg "[BASELINE] vendor=$VENDOR_READY product=$PRODUCT_READY"
+if [ "$VENDOR_READY" -eq 0 ] && [ "$PRODUCT_READY" -eq 0 ]; then
+    log_msg "[FRAMEWORK ONLY] No matching file baseline; skipping vendor and product mounts."
     exit 0
 fi
 
@@ -194,10 +199,16 @@ prepare_mirror_node() {
 }
 
 # 逐一构建镜像
-if ! prepare_mirror_node "$REL_1" "$ORIG_SRC_1" "$MIRROR_SRC_1" "$TGT_1" "$CTX_1" || \
-   ! prepare_mirror_node "$REL_2" "$ORIG_SRC_2" "$MIRROR_SRC_2" "$TGT_2" "$CTX_2" || \
-   ! prepare_mirror_node "$REL_3" "$ORIG_SRC_3" "$MIRROR_SRC_3" "$TGT_3" "$CTX_3" || \
-   ! prepare_mirror_node "$REL_4" "$ORIG_SRC_4" "$MIRROR_SRC_4" "$TGT_4" "$CTX_4"; then
+PREPARED=1
+if [ "$VENDOR_READY" -eq 1 ]; then
+    prepare_mirror_node "$REL_1" "$ORIG_SRC_1" "$MIRROR_SRC_1" "$TGT_1" "$CTX_1" &&
+    prepare_mirror_node "$REL_2" "$ORIG_SRC_2" "$MIRROR_SRC_2" "$TGT_2" "$CTX_2" || PREPARED=0
+fi
+if [ "$PRODUCT_READY" -eq 1 ]; then
+    prepare_mirror_node "$REL_3" "$ORIG_SRC_3" "$MIRROR_SRC_3" "$TGT_3" "$CTX_3" &&
+    prepare_mirror_node "$REL_4" "$ORIG_SRC_4" "$MIRROR_SRC_4" "$TGT_4" "$CTX_4" || PREPARED=0
+fi
+if [ "$PREPARED" -eq 0 ]; then
     log_msg "[ABORT] Pre-flight mirror preparation failed. Zero mounts executed."
     rm -rf "$MIRROR_DIR" 2>/dev/null
     exit 1
@@ -243,10 +254,14 @@ mount_node() {
     fi
 }
 
-if ! mount_node "$MIRROR_SRC_1" "$TGT_1" || \
-   ! mount_node "$MIRROR_SRC_2" "$TGT_2" || \
-   ! mount_node "$MIRROR_SRC_3" "$TGT_3" || \
-   ! mount_node "$MIRROR_SRC_4" "$TGT_4"; then
+MOUNT_OK=1
+if [ "$VENDOR_READY" -eq 1 ]; then
+    mount_node "$MIRROR_SRC_1" "$TGT_1" && mount_node "$MIRROR_SRC_2" "$TGT_2" || MOUNT_OK=0
+fi
+if [ "$MOUNT_OK" -eq 1 ] && [ "$PRODUCT_READY" -eq 1 ]; then
+    mount_node "$MIRROR_SRC_3" "$TGT_3" && mount_node "$MIRROR_SRC_4" "$TGT_4" || MOUNT_OK=0
+fi
+if [ "$MOUNT_OK" -eq 0 ]; then
     rollback_session_mounts
     exit 1
 fi

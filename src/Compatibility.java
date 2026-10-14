@@ -3,7 +3,7 @@ import java.util.*;
 /** Pure compatibility and fallback rules, maintained by iCassius. */
 public final class Compatibility {
     public static boolean eligible(String manufacturer, String brand, String model, int sdk) {
-        if(!"Google".equals(manufacturer) || !"google".equals(brand) || sdk<31 || sdk>36)return false;
+        if(!"Google".equals(manufacturer) || !"google".equals(brand) || sdk<31)return false;
         return Arrays.asList("Pixel 6","Pixel 6 Pro","Pixel 6a","Pixel 7","Pixel 7 Pro","Pixel 7a",
             "Pixel 8","Pixel 8 Pro","Pixel 8a","Pixel 9","Pixel 9 Pro","Pixel 9 Pro XL","Pixel 9 Pro Fold","Pixel 9a",
             "Pixel 10","Pixel 10 Pro","Pixel 10 Pro XL","Pixel 10 Pro Fold","Pixel 10a",
@@ -11,7 +11,13 @@ public final class Compatibility {
     }
     public static boolean fullIdentity(String device,String build,String baseband) {
         return "mustang".equals(device) && "CP3A.260905.009".equals(build) &&
-            "g5400i-260604-260807-B-16035863".equals(baseband);
+            modemMatches(baseband);
+    }
+    public static boolean modemMatches(String baseband) {
+        if(baseband==null || baseband.isEmpty())return false;
+        for(String modem:baseband.split(",",-1))
+            if(!"g5400i-260604-260807-B-16035863".equals(modem.trim()))return false;
+        return true;
     }
     public static String carrier(String mcc,String mnc) {
         if(!"460".equals(mcc))return null;
@@ -23,11 +29,10 @@ public final class Compatibility {
             default:return null;
         }
     }
-    public static Map<String,Object> fallback(Map<String,Object> current,int sdk) {
+    public static Map<String,Object> fallback(Map<String,Object> current) {
         Map<String,Object> result=new LinkedHashMap<>();
         for(String key:new String[]{"carrier_volte_available_bool","carrier_wfc_ims_available_bool",
                 "vonr_enabled_bool","vonr_on_by_default_bool","vonr_setting_visibility_bool"}) {
-            if(key.startsWith("vonr_") && sdk<34)continue;
             if(current.get(key) instanceof Boolean)result.put(key,true);
         }
         if(current.get("carrier_nr_availabilities_int_array") instanceof int[]) {

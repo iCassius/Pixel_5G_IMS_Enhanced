@@ -61,7 +61,7 @@ echo '{"subscriptions":[],"targetCount":0}'
     for i,relative in enumerate(['vendor_override/cfg.db','vendor_override/open_carrier_info.dat','product_override/others.pb','product_override/default.pb'],1):
         target=work/f'target{i}';target.write_bytes(b'original '+str(i).encode())
         script=re.sub(r'^TGT_'+str(i)+r'="[^"]+"',f'TGT_{i}="{target.as_posix()}"',script,flags=re.M)
-        table.append(target.as_posix()+' '+sha(target)+','+sha(mod/relative)+'\n')
+        table.append(('vendor' if i<=2 else 'product')+' '+target.as_posix()+' '+sha(target)+','+sha(mod/relative)+'\n')
     write(mod/'full-files.tsv',''.join(table));write(mod/'post-fs-data.sh',script)
     write(mod/'control.sh',(mod/'control.sh').read_text(encoding='utf-8').replace('/dev/enable_pixel_5g',(work/'runtime').as_posix()))
     manifest={'outputs':{p.relative_to(mod).as_posix():{'sha256':sha(p)} for p in mod.rglob('*') if p.is_file()}}
@@ -89,27 +89,44 @@ def main():
         check('shell syntax '+p.name,subprocess.run([str(BASH),'-n',str(p)],capture_output=True).returncode==0)
     scenarios={'full':{},'baseband mismatch':{'TEST_MODEM':'unknown'},'empty baseband':{'EMPTY_MODEM':'1'},
         'old report baseband':{'TEST_MODEM':'g5400i-250605-250825-B-13984049'},'OTA':{'TEST_BUILD':'NEW'},
-        'Pixel6':{'TEST_DEVICE':'oriole','TEST_MODEL':'Pixel 6','TEST_SDK':'31'},
-        'Pixel11 unknown SDK':{'TEST_DEVICE':'future','TEST_MODEL':'Pixel 11','TEST_SDK':'37'},
-        'missing files':{},'changed ROM files':{},'partial mount failure':{'FAIL_SECOND':'1'},
+        'Pixel6':{'TEST_DEVICE':'oriole','TEST_MODEL':'Pixel 6','TEST_SDK':'31','TEST_MODEM':'other'},
+        'other Pixel same modem':{'TEST_DEVICE':'future','TEST_MODEL':'Pixel 11','TEST_SDK':'37'},
+        'API37':{'TEST_SDK':'37'},'future API':{'TEST_SDK':'99'},
+        'dual modem':{'TEST_MODEM':'g5400i-260604-260807-B-16035863,g5400i-260604-260807-B-16035863'},
+        'mixed modem':{'TEST_MODEM':'g5400i-260604-260807-B-16035863,other'},
+        'missing files':{},'changed ROM files':{},'changed product files':{},'corrupt payload':{},'partial mount failure':{'FAIL_SECOND':'1'},
         'rollback failure':{'FAIL_SECOND':'1','FAIL_UNMOUNT':'1'},'reentry':{},'framework package':{}}
     for name,variables in scenarios.items():
         with tempfile.TemporaryDirectory(prefix='pixelims-shell-test-') as temp:
             work=pathlib.Path(temp);mod,env,actions,info=fixture(work);env.update(variables)
             if name=='missing files':(mod/'full-files.tsv').unlink()
             if name=='changed ROM files':(work/'target1').write_bytes(b'OTA data')
+            if name=='changed product files':(work/'target3').write_bytes(b'OTA PB')
+            if name=='corrupt payload':(mod/'vendor_override/cfg.db').write_bytes(b'corrupted payload')
             if name=='framework package':write(mod/'full-files.tsv','')
             result=execute(mod/'post-fs-data.sh',env)
-            if name in ('full','reentry'):
+            if name in ('full','reentry','API37','future API','dual modem'):
                 check(name+' mounts',result.returncode==0 and actions.read_text().count('mount ')==4)
                 if name=='reentry':
                     second=execute(mod/'post-fs-data.sh',env)
                     check('reentry avoids remount',second.returncode==0 and actions.read_text().count('mount ')==4)
+            elif name in ('OTA','other Pixel same modem','changed product files'):
+                check(name+' vendor only',result.returncode==0 and actions.read_text().count('mount ')==2 and 'mount '+(work/'target3').as_posix() not in actions.read_text())
+            elif name=='changed ROM files':
+                check(name+' product only',result.returncode==0 and actions.read_text().count('mount ')==2 and 'mount '+(work/'target1').as_posix() not in actions.read_text())
+            elif name=='corrupt payload':check(name,result.returncode!=0 and not actions.read_text())
             elif name=='partial mount failure':
                 check(name,result.returncode!=0 and not info.read_text() and (work/'target1').read_bytes()==b'original 1')
             elif name=='rollback failure':
                 check(name,result.returncode!=0 and bool(info.read_text()) and any((work/'mirror').glob('session.*')))
             else:check(name+' zero mounts',result.returncode==0 and not actions.read_text())
+    for sdk in ('31','37','99','30','invalid'):
+        with tempfile.TemporaryDirectory(prefix='pixelims-install-test-') as temp:
+            mod,env,actions,info=fixture(pathlib.Path(temp));env.update(TEST_SDK=sdk,MODPATH=mod.as_posix())
+            wrapper=mod/'install-probe.sh'
+            write(wrapper,'abort() { exit 1; }; ui_print() { :; }; set_perm_recursive() { :; }; set_perm() { :; }; . "$MODPATH/customize.sh"\n')
+            result=execute(wrapper,env)
+            check('installer SDK '+sdk,(result.returncode==0)==(sdk in ('31','37','99')))
     for name in ('status','success','failure','maintain','corrupt helper','corrupt policy','corrupt gate'):
         with tempfile.TemporaryDirectory(prefix='pixelims-control-test-') as temp:
             mod,env,actions,info=fixture(pathlib.Path(temp))

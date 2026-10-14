@@ -5,11 +5,17 @@ public final class CompatibilityTest {
     public static void main(String[] args) {
         for(int generation=6;generation<=11;generation++)
             check("Pixel family "+generation,Compatibility.eligible("Google","google","Pixel "+generation,36));
-        check("unknown SDK",!Compatibility.eligible("Google","google","Pixel 11",37));
+        check("Android17",Compatibility.eligible("Google","google","Pixel 10 Pro XL",37));
+        check("no SDK ceiling",Compatibility.eligible("Google","google","Pixel 11",99));
         check("old SDK",!Compatibility.eligible("Google","google","Pixel 6",30));
         check("wrong vendor",!Compatibility.eligible("Other","google","Pixel 10",36));
         check("wrong model",!Compatibility.eligible("Google","google","Pixel 5",36));
         check("full exact",Compatibility.fullIdentity("mustang","CP3A.260905.009","g5400i-260604-260807-B-16035863"));
+        String known="g5400i-260604-260807-B-16035863";
+        check("dual modem",Compatibility.modemMatches(known+","+known));
+        check("trim modem fields",Compatibility.modemMatches(" "+known+", "+known+" "));
+        check("empty modem field",!Compatibility.modemMatches(known+","));
+        check("missing modem field",!Compatibility.modemMatches(","+known));
         for(String value:new String[]{"","unknown","g5400i-250605-250825-B-13984049","g5400i-260604-260807-B-16035863,new"})
             check("wrong/empty modem",!Compatibility.fullIdentity("mustang","CP3A.260905.009",value));
         check("other device",!Compatibility.fullIdentity("other","CP3A.260905.009","g5400i-260604-260807-B-16035863"));
@@ -24,19 +30,19 @@ public final class CompatibilityTest {
         current.put("carrier_nr_availabilities_int_array",new int[]{1});
         current.put("vendor.ims.carrier_video_over_lte_bool",false);current.put("support_cdma_1x_voice_calls_bool",true);
         current.put("carrier_vt_available_bool",true);current.put("carrier_default_wfc_ims_mode_int",2);
-        Map<String,Object> modern=Compatibility.fallback(current,36);
+        Map<String,Object> modern=Compatibility.fallback(current);
         check("all portable keys",modern.size()==6);
         check("SA and NSA",Arrays.equals((int[])modern.get("carrier_nr_availabilities_int_array"),new int[]{1,2}));
-        check("API31 excludes VoNR",Compatibility.fallback(current,31).size()==3);
+        check("present backported keys accepted",Compatibility.fallback(current).size()==6);
         check("input unchanged",Boolean.FALSE.equals(current.get("vonr_enabled_bool")));
         for(String excluded:new String[]{"vendor.ims.carrier_video_over_lte_bool","support_cdma_1x_voice_calls_bool","carrier_vt_available_bool","carrier_default_wfc_ims_mode_int"})
             check("native retained "+excluded,!modern.containsKey(excluded));
-        check("absent keys skipped",Compatibility.fallback(Collections.emptyMap(),36).isEmpty());
-        current.put("vonr_enabled_bool","false");check("wrong bool type skipped",!Compatibility.fallback(current,36).containsKey("vonr_enabled_bool"));
+        check("absent keys skipped",Compatibility.fallback(Collections.emptyMap()).isEmpty());
+        current.put("vonr_enabled_bool","false");check("wrong bool type skipped",!Compatibility.fallback(current).containsKey("vonr_enabled_bool"));
         current.put("carrier_nr_availabilities_int_array",new int[]{1,99});
-        check("future enum preserved",!Compatibility.fallback(current,36).containsKey("carrier_nr_availabilities_int_array"));
+        check("future enum preserved",!Compatibility.fallback(current).containsKey("carrier_nr_availabilities_int_array"));
         current.put("carrier_nr_availabilities_int_array","1,2");
-        check("wrong array type skipped",!Compatibility.fallback(current,36).containsKey("carrier_nr_availabilities_int_array"));
+        check("wrong array type skipped",!Compatibility.fallback(current).containsKey("carrier_nr_availabilities_int_array"));
         System.out.println("Compatibility assertions: "+count+" passed");
     }
 }

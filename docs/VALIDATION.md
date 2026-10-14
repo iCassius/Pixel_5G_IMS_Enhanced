@@ -1,5 +1,15 @@
 # 发布前验证
 
+## v2.6.3 — 2026-10-15
+
+- 修复 Android 17／API 37 被安装与运行双重版本上限拒绝的问题，保留实际 DEX API 31 下限。
+- VoNR 等参数不再按 API 数字筛选，以有效配置中存在且类型正确为依据；写前保持接口、SIM、通话空闲检查。
+- vendor 组按基带归一化与两项文件哈希选择，product 组独立检查；混合／空基带字段拒绝，双卡重复版本接受。
+- 系统 UID 1000 使用 android 包身份调用 Binder；提供只读接口能力诊断。
+- 本机 API 37 安装前检查通过，六项参数真实读取，覆盖接口存在，通话状态接口返回空闲。wrote=false，未执行覆盖写入、挂载、安装或重启。
+- 本机两项 vendor 哈希符合登记值，others.pb 为不同哈希，说明不能仅凭基带匹配覆盖整份 PB。
+- 私有本机记录保存在 build/android17_readonly_probe.json，不进入公开源码。
+
 ## GitHub 发布记录 — 2026-10-14
 
 仓库 iCassius/Pixel_5G_IMS_Enhanced 已公开，v2.6.2-experimental 预发布及四个附件已上传。
