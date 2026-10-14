@@ -17,8 +17,12 @@ Release 标签必须等于模块 version；上传对应 ZIP、update JSON、CHAN
 | 私有 mustang VCRBT | update-private-mustang-vcrbt.json |
 
 各包只指向自身渠道，缺少对应资产时报错，不回落到其他渠道。私有载荷仍不自动公开上传。
-更新源使用 /releases/latest/download，需发布为非 prerelease 的 Latest Release 才参与自动更新。
-experimental prerelease 通过操作按钮手动下载；当前不存在的仓库／Release 地址不代表更新已上线。
+更新源使用 raw.githubusercontent.com/<仓库>/updates/update-<渠道>.json，支持 experimental prerelease。
+GitHub Actions 仅在 v* 标签匹配 module.prop 且构建／检查通过后发布框架包，并在 Release 资产存在后更新 updates 分支。
+更新源拒绝版本号倒退或同一 versionCode 指向不同版本；已匹配的重试不改写。
+私有基带渠道不自动发布；没有对应更新源文件时不会误装框架包。
+框架资产在 dist/release/<版本>/；基带资产在 dist/private/<版本>/，公开 workflow 只上传前者。
+当前不存在的仓库／Release 地址不代表更新已上线；尚未执行远端 CI。
 仓库私有时管理器无法匿名下载，需手动获取包或提供可公开访问的独立分发仓库。
 
 官方定义：https://kernelsu.org/guide/module.html 。安装升级后原有机型／基带守卫仍会运行。

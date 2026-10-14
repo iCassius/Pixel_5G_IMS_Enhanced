@@ -1,5 +1,13 @@
 # 变更记录
 
+## v2.6.2-experimental — 2026-10-14 — iCassius
+
+- 模块与安装包统一名称 Pixel_5G_IMS_Enhanced，保留 EnablePixel5G 模块 ID。
+- 增加 Windows／Linux 构建支持和 GitHub Actions 发布流程。
+- 更新源改为独立 updates 分支，实验预发布也可通知更新。
+- 公开框架产物与私有基带包隔离，固定 ZIP 元数据以便核验。
+- 修复守护与手动切换之间的旧 Profile 回写竞争。
+
 ## v2.6.1-experimental — 2026-10-14 — iCassius
 
 - 增加 KernelSU 原生更新源及操作按钮，按钮打开 GitHub Releases。

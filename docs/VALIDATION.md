@@ -1,4 +1,17 @@
-# v2.6.0 离线验证
+# 发布前验证
+
+## v2.6.2 — 2026-10-14
+
+- 模块／README／安装包名称统一 Pixel_5G_IMS_Enhanced；版本 v2.6.2-experimental，versionCode 28。
+- 47 项 Java 规则断言、63 项离线检查通过，新增更新资产检查和守护保持当前 Profile 的回归。
+- Windows 本地三个包编译、D8、ZIP 校验通过；框架包重复构建 SHA256 一致：8bc2ad4637cfaaf0e46a7ed40f67420c3bafc3f8ceee439976c67192feecdb60。
+- 公开资产目录仅框架 ZIP、SHA256、update-framework.json、CHANGELOG.md；私有 mustang 包隔离在 dist/private/。
+- GitHub Actions YAML 已解析，各 run 块通过 Bash 语法检查，依赖固定 SHA。跨平台工具定位已实现，但未运行 Linux 或远端 CI。
+- 本地源码列表未包含厂商二进制／原始日志，常见 GitHub token 与私钥格式扫描无命中；原作者来源说明保留，许可证来源仍未确认。
+- GitHub 连接确认用户 iCassius；iCassius/PixelIMS 返回 404，本地尚未设置 remote 或上传。
+- 当前新版本无 Android Binder 写入、按钮、真实挂载、IMS 注册／呼叫或跨型号实机验证。准备为实验发布，不能归为稳定版验收。
+
+机器记录：build/validation.json、build/release_preparation.json；这些文件仅本地保留。
 
 ## v2.6.1 更新入口验证 — 2026-10-14
 

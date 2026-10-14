@@ -22,11 +22,9 @@ done
 delay=10
 while [ ! -f "$MODDIR/disable" ] && [ ! -f "$MODDIR/remove" ]; do
     if [ "$(service check carrier_config 2>/dev/null)" = 'Service carrier_config: found' ]; then
-        profile=base
-        [ -f "$MODDIR/profile.conf" ] && profile=$(tr -d '\r\n' < "$MODDIR/profile.conf")
         # The helper validates the exact target SIM, readiness, idle state and all managed values.
         # No-op readback avoids repeated overrides and config-change loops.
-        if sh "$MODDIR/control.sh" "$profile" > "$MODDIR/status.json.new" 2> "$MODDIR/service.error"; then
+        if sh "$MODDIR/control.sh" maintain > "$MODDIR/status.json.new" 2> "$MODDIR/service.error"; then
             mv "$MODDIR/status.json.new" "$MODDIR/status.json"
             delay=60
         else

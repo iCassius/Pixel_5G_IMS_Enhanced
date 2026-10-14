@@ -1,8 +1,11 @@
 """Pure Java rules plus real shell execution with mocked properties/mounts. No device writes."""
-import hashlib,json,os,pathlib,re,shutil,subprocess,tempfile,zipfile
+import hashlib,json,os,pathlib,re,shutil,subprocess,sys,tempfile,zipfile
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-BASH=pathlib.Path(os.environ.get('PIXELIMS_BASH',r'C:\Program Files\Git\bin\bash.exe'))
-JDK=pathlib.Path(os.environ.get('JAVA_HOME',r'C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot'))/'bin'
+sys.path.insert(0,str(ROOT))
+from runtime import bash_tool,java_tool
+sys.path.insert(0,str(ROOT/'tools'))
+from publish_update import validate as validate_update
+BASH=bash_tool()
 results=[]
 def write(path,text):path.write_text(text,encoding='utf-8',newline='\n')
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -66,9 +69,20 @@ echo '{"subscriptions":[],"targetCount":0}'
     for p in bin.iterdir():p.chmod(0o755)
     return mod,env,actions,info
 def main():
+    repo='iCassius/PixelIMS';tag='v2.6.2-experimental'
+    prefix='https://github.com/'+repo+'/releases/download/'+tag+'/'
+    metadata={'version':tag,'versionCode':28,'zipUrl':prefix+'test-framework.zip','changelog':prefix+'CHANGELOG.md'}
+    validate_update(metadata,repo,tag,{'test-framework.zip','CHANGELOG.md'})
+    check('release metadata valid',True)
+    for name,patch,assets in [('foreign URL',{'zipUrl':'https://other.invalid/test.zip'},{'test-framework.zip','CHANGELOG.md'}),
+        ('missing asset',{}, {'CHANGELOG.md'}),('private payload',{'zipUrl':prefix+'test-private.zip'},{'test-private.zip','CHANGELOG.md'}),
+        ('version mismatch',{'version':'v0.0.0'},{'test-framework.zip','CHANGELOG.md'})]:
+        try:validate_update(dict(metadata,**patch),repo,tag,assets)
+        except ValueError:check('feed rejects '+name,True)
+        else:check('feed rejects '+name,False)
     with tempfile.TemporaryDirectory(prefix='pixelims-java-test-') as temp:
-        subprocess.run([str(JDK/'javac.exe'),'--release','8','-encoding','UTF-8','-d',temp,str(ROOT/'src/Compatibility.java'),str(ROOT/'tests/CompatibilityTest.java')],check=True)
-        java=subprocess.run([str(JDK/'java.exe'),'-cp',temp,'CompatibilityTest'],check=True,capture_output=True,text=True)
+        subprocess.run([java_tool('javac'),'--release','8','-encoding','UTF-8','-d',temp,str(ROOT/'src/Compatibility.java'),str(ROOT/'tests/CompatibilityTest.java')],check=True)
+        java=subprocess.run([java_tool('java'),'-cp',temp,'CompatibilityTest'],check=True,capture_output=True,text=True)
         print(java.stdout.strip());check('Java compatibility assertions',java.returncode==0)
     for p in (ROOT/'module').glob('*.sh'):
         check('shell syntax '+p.name,subprocess.run([str(BASH),'-n',str(p)],capture_output=True).returncode==0)
@@ -95,15 +109,17 @@ def main():
             elif name=='rollback failure':
                 check(name,result.returncode!=0 and bool(info.read_text()) and any((work/'mirror').glob('session.*')))
             else:check(name+' zero mounts',result.returncode==0 and not actions.read_text())
-    for name in ('status','success','failure','corrupt helper','corrupt policy','corrupt gate'):
+    for name in ('status','success','failure','maintain','corrupt helper','corrupt policy','corrupt gate'):
         with tempfile.TemporaryDirectory(prefix='pixelims-control-test-') as temp:
             mod,env,actions,info=fixture(pathlib.Path(temp))
             if name=='failure':env['SU_FAIL']='1'
+            if name=='maintain':write(mod/'profile.conf','vcrbt\n')
             if name.startswith('corrupt'):
                 target={'corrupt helper':'override.dex','corrupt policy':'policy.json','corrupt gate':'compatibility.sh'}[name]
                 write(mod/target,'corrupt')
-            result=execute(mod/'control.sh',env,'status' if name=='status' else 'vcrbt')
-            if name in ('status','success'):
+            result=execute(mod/'control.sh',env,name if name in ('status','maintain') else 'vcrbt')
+            if name=='maintain':check('supervisor preserves selected profile',result.returncode==0 and (mod/'profile.conf').read_text()=='vcrbt\n' and '--profile vcrbt' in actions.read_text())
+            elif name in ('status','success'):
                 check('control '+name,result.returncode==0 and (mod/'profile.conf').read_text()==('base\n' if name=='status' else 'vcrbt\n'))
                 if name=='status':check('status read flag','--status' in actions.read_text())
             else:check('control '+name,result.returncode!=0 and (mod/'profile.conf').read_text()=='base\n' and (not name.startswith('corrupt') or not actions.read_text()))
@@ -116,7 +132,9 @@ def main():
             if name=='open releases':check(name,result.returncode==0 and 'https://github.com/iCassius/PixelIMS/releases' in actions.read_text() and 'su ' not in actions.read_text())
             else:check(name,result.returncode!=0 and (name!='invalid repository' or not actions.read_text()))
     current=dict(line.split('=',1) for line in (ROOT/'module/module.prop').read_text(encoding='utf-8').splitlines() if '=' in line)
-    for archive in (ROOT/'dist').glob('*.zip'):
+    archives=list((ROOT/'dist/release'/current['version']).glob('*.zip'))+list((ROOT/'dist/private'/current['version']).glob('*.zip'))
+    check('current release package exists',any('framework.zip' in p.name for p in archives))
+    for archive in archives:
         with zipfile.ZipFile(archive) as zipped:
             check(archive.name+' LF scripts',all(b'\r' not in zipped.read(n) for n in zipped.namelist() if n.endswith('.sh')))
             if 'framework' in archive.name:check('default no proprietary payload',not any(n.startswith(('vendor_override/','product_override/')) for n in zipped.namelist()))
@@ -124,12 +142,15 @@ def main():
             check(archive.name+' manifest hashes',all(hashlib.sha256(zipped.read(n)).hexdigest()==v['sha256'] for n,v in manifest['outputs'].items()))
             if manifest['module_version']==current['version']:
                 props=dict(line.split('=',1) for line in zipped.read('module.prop').decode().splitlines() if '=' in line)
-                label=archive.name.removeprefix('PixelIMS-'+current['version']+'-').removesuffix('.zip')
-                update=json.loads((ROOT/'dist'/('update-'+label+'.json')).read_text(encoding='utf-8'))
+                check('module display name',props['name']==current['name'])
+                label=archive.name.removeprefix(current['name']+'-'+current['version']+'-').removesuffix('.zip')
+                update=json.loads((archive.parent/('update-'+label+'.json')).read_text(encoding='utf-8'))
                 check(label+' update channel',props['updateJson'].endswith('/update-'+label+'.json'))
                 check(label+' update version',update['version']==props['version'] and update['versionCode']==int(props['versionCode']))
                 check(label+' release asset',update['zipUrl'].endswith('/'+props['version']+'/'+archive.name))
-                check(label+' action included','action.sh' in zipped.namelist() and zipped.read('update-repository')==b'iCassius/PixelIMS\n')
+                repository=zipped.read('update-repository').decode().strip()
+                check(label+' action included','action.sh' in zipped.namelist() and props['updateJson']=='https://raw.githubusercontent.com/'+repository+'/updates/update-'+label+'.json')
+                check(label+' ZIP script mode',(zipped.getinfo('action.sh').external_attr>>16)&0o777==0o755)
     out=ROOT/'build';out.mkdir(exist_ok=True)
     write(out/'validation.json',json.dumps({'evidence':'Pure Java and Windows Git Bash mock fixtures; not Android Binder/SELinux/device validation','results':results,'all_passed':True},indent=2))
     print('Checks:',len(results),'passed')
