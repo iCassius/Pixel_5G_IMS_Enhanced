@@ -77,6 +77,6 @@ def main():
         release='https://github.com/'+args.update_repository+'/releases/download/'+version+'/'
         update={'version':version,'versionCode':version_code,'zipUrl':release+archive.name,'changelog':release+'CHANGELOG.md'}
         write(out/('update-'+label+'.json'),json.dumps(update,ensure_ascii=False,indent=2)+'\n')
-        shutil.copy2(ROOT/'CHANGELOG.md',out/'CHANGELOG.md')
+        shutil.copy2(ROOT/'docs/RELEASE_NOTES.md',out/'CHANGELOG.md')
         print(archive)
 if __name__=='__main__':main()

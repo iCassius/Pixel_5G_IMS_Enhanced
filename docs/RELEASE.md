@@ -9,6 +9,7 @@
 每次发布先提高 module/module.prop 的 versionCode，修改 version 和 CHANGELOG，再构建。
 构建以 module.prop 为唯一版本来源，生成对应 ZIP、SHA256 和 update-<渠道>.json。
 Release 标签必须等于模块 version；上传对应 ZIP、update JSON、CHANGELOG.md 和 SHA256。
+发布附件 CHANGELOG.md 使用 docs/RELEASE_NOTES.md 的功能及实机记录，工程变更历史另保留在源码根目录。
 
 | 构建 | 更新描述文件 |
 |---|---|

@@ -1,13 +1,19 @@
 # Pixel_5G_IMS_Enhanced v2.6.2-experimental
 
-基于 Sun_Dream 的 PixelVo5G Enabler for Global v1.1，后续维护 iCassius。
+## 功能
 
-提供国内移动、联通、电信、广电的 VoLTE／VoWiFi／SA／NSA／VoNR 框架配置，保留国际及未知 PLMN 的原有配置。
-本次公开 ZIP 仅框架兜底，不含 mustang 的 vendor／PB 基带载荷；Base／VCRBT 在框架层均不启用厂商视频实验参数。
+- 国内移动、联通、电信、广电的 VoLTE／VoWiFi／SA／NSA／VoNR 框架配置。
+- 国际卡和未知 PLMN 保留系统配置。
+- 按系统版本、参数存在性和类型选择配置，基带不匹配时使用框架兜底。
+- 配置读回和定期维护，支持 Base／VCRBT 策略选择。
+- KernelSU 更新入口和 GitHub Releases 按钮。
+- 本次发布为框架包。
 
-新增模块更新入口和 Releases 按钮，预发布版本通过独立更新源通知。修复守护与手动切换的 Profile 回写竞争。
+## 已有实机记录（KSU v2.5）
 
-Android API 31～36 的 Google Pixel 6～11 型号名称为实验入口范围，VoNR 参数要求 API 34+；未知 SDK 停止安装／写入。
-新版本只完成离线构建与模拟检查，未验证跨型号或四家真实网络能力。旧安装的持久覆盖不会自动清除；禁用后需重启并审计残留。
+2026-10-14，Pixel 10 Pro XL（mustang）、Android 16 CP3A.260905.009、中国电信 46011：
 
-ZIP 对应 SHA256 和 update-framework.json 为本 Release 附件。模块 ID 仍为 EnablePixel5G，请勿与旧模块并行安装。
+- 四项配置挂载完成，文件哈希和 SELinux 标签核验通过。
+- VCRBT 策略写入及受管值读回成功，日志记录 `matchesPolicy=true`。
+- 开机守护生成成功的 `status.json`。
+- VoLTE、VoWiFi、VoNR 参数读回为启用。
