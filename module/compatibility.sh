@@ -21,11 +21,8 @@ pixel_modem_matches() {
         END {if (!seen) exit 1}'
 }
 pixel_vendor_identity() { pixel_modem_matches; }
-pixel_product_identity() {
-    [ "$(getprop ro.product.device)" = mustang ] &&
-    [ "$(getprop ro.build.display.id)" = CP3A.260905.009 ] &&
-    pixel_modem_matches
-}
+# Exact file hashes gate each group; matching content needs no build-number guess.
+pixel_product_identity() { pixel_modem_matches; }
 pixel_files_compatible() {
     requested_group=$1
     [ -s "$MODDIR/full-files.tsv" ] || return 1

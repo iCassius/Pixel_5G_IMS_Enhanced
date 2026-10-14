@@ -1,4 +1,4 @@
-name: Build and release
+name: Build and verify
 on:
   push:
     branches: [main]
@@ -29,50 +29,8 @@ jobs:
           python3 tests/run.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Pixel_5G_IMS_Enhanced-framework
+          name: Pixel_5G_IMS_Enhanced-framework-development
           path: |
-            dist/release/
+            dist/development/
             build/validation.json
           retention-days: 7
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
-        with:
-          distribution: temurin
-          java-version: '21'
-      - name: Verify tag
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          python3 - <<'PY'
-          import os,pathlib
-          props=dict(line.split('=',1) for line in pathlib.Path('module/module.prop').read_text().splitlines() if '=' in line)
-          assert os.environ['RELEASE_TAG']==props['version'], 'Tag/module version mismatch'
-          PY
-      - name: Install Android SDK packages
-        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36.1" "build-tools;35.0.0"'
-      - name: Rebuild and verify release assets
-        run: |
-          python3 build.py --update-repository "${{ github.repository }}"
-          python3 tests/run.py
-      - name: Publish framework release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          flags=()
-          if [[ "$RELEASE_TAG" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$RELEASE_TAG" "dist/release/$RELEASE_TAG/Pixel_5G_IMS_Enhanced-$RELEASE_TAG.zip" --verify-tag "${flags[@]}" --title "Pixel_5G_IMS_Enhanced $RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md
-      - name: Publish verified update feed
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: python3 tools/publish_update.py --repo "${{ github.repository }}" --tag "$RELEASE_TAG"

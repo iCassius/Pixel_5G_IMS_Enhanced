@@ -1,7 +1,7 @@
 id=EnablePixel5G
 name=Pixel_5G_IMS_Enhanced
-version=v2.6.3
-versionCode=30
+version=v2.6.4
+versionCode=31
 author=iCassius (original module: Sun_Dream)
-description=China IMS/VoNR/SA framework fallback; audited mustang-only modem patch. Original PixelVo5G Enabler for Global v1.1 by Sun_Dream.
+description=Pixel 国内四家 5G／IMS 增强；基带和文件基线匹配后加载专项配置，否则使用基础框架配置。原作者 Sun_Dream，维护 iCassius。
 updateJson=https://raw.githubusercontent.com/iCassius/Pixel_5G_IMS_Enhanced/updates/update-framework.json

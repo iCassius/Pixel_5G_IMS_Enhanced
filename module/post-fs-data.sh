@@ -2,7 +2,7 @@
 # ==============================================================================
 # Pixel_5G_IMS_Enhanced - KernelSU / Magisk Early Boot Mount Script
 # Vendor profile: audited g5400i modem and vendor file hashes
-# Product profile: independently audited mustang CarrierSettings baseline
+# Product profile: independently audited CarrierSettings file baseline
 # Note          : /dev mirror is an isolated workaround for namespace-specific unmounts
 # ==============================================================================
 
@@ -25,6 +25,15 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] === EnablePixel5G v2.6 post-fs-data started
 # 1. 严格设备与固件基线守卫 (R4: 拒绝空属性与未验证 OTA 版本)
 # ------------------------------------------------------------------------------
 # iCassius: identity and content gates must pass before preparing any mount.
+# Reject corrupted guards/tables before sourcing or evaluating them.
+for node in compatibility.sh full-files.tsv policy.json; do
+    expected=$(awk -v key="\"$node\"" 'index($0,key) {block=1;next} block && /"sha256"/ {gsub(/.*"sha256"[[:space:]]*:[[:space:]]*"/, "");gsub(/".*/, "");print;exit}' "$MANIFEST_FILE" 2>/dev/null)
+    actual=$(sha256sum "$MODDIR/$node" 2>/dev/null | awk '{print $1}')
+    if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+        log_msg "[ABORT] Integrity failure: $node; zero mounts."
+        exit 1
+    fi
+done
 . "$MODDIR/compatibility.sh"
 if ! pixel_framework_eligible; then
     log_msg "[SKIP] Unsupported platform; no mounts or policy writes."
@@ -138,6 +147,8 @@ rollback_session_mounts() {
 # ------------------------------------------------------------------------------
 # 5. 全量前置预检、源文件校验与 /dev 隔离镜像构建
 # ------------------------------------------------------------------------------
+trap 'rollback_session_mounts; exit 1' HUP INT TERM
+
 if [ ! -s "$MANIFEST_FILE" ]; then
     log_msg "[PRECHECK ERROR] Release manifest missing or empty: $MANIFEST_FILE"
     exit 1

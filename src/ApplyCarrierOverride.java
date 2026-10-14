@@ -66,16 +66,17 @@ public final class ApplyCarrierOverride {
         throw new IllegalStateException("Full managed read-back timed out");
     }
     private static void selfTest(JSONObject policy)throws Exception {
-        PersistableBundle desired=bundle(policy.getJSONObject("common"));desired.putAll(bundle(policy.getJSONObject("base")));
-        final PersistableBundle previous=bundle(policy.getJSONObject("common"));previous.putAll(bundle(policy.getJSONObject("vcrbt")));
+        PersistableBundle desired=bundle(policy.getJSONObject("fallback"));
+        final PersistableBundle previous=new PersistableBundle(desired);
+        previous.putBoolean("carrier_volte_available_bool",false);
         previous.putString("other_owner_key","retained");
-        if(equal(previous,desired))throw new AssertionError("Stale vcrbt matched base");
+        if(equal(previous,desired))throw new AssertionError("Stale IMS value matched policy");
         long start=SystemClock.elapsedRealtime();
         PersistableBundle result=await(()->{if(SystemClock.elapsedRealtime()-start>=300)previous.putAll(desired);return previous;},desired,2000);
         if(!"retained".equals(result.getString("other_owner_key")))throw new AssertionError("Unrelated owner erased");
-        PersistableBundle missing=new PersistableBundle(desired);missing.remove("carrier_vt_available_bool");
-        if(equal(missing,desired))throw new AssertionError("Missing false key accepted");
-        PersistableBundle wrongArray=new PersistableBundle(desired);wrongArray.putIntArray("ims.capability_type_video_int_array",new int[]{0,1});
+        PersistableBundle missing=new PersistableBundle(desired);missing.remove("carrier_volte_available_bool");
+        if(equal(missing,desired))throw new AssertionError("Missing managed key accepted");
+        PersistableBundle wrongArray=new PersistableBundle(desired);wrongArray.putIntArray("carrier_nr_availabilities_int_array",new int[]{1});
         if(equal(wrongArray,desired))throw new AssertionError("Array mismatch accepted");
         try {await(()->missing,desired,300);throw new AssertionError("Timeout not enforced");}catch(IllegalStateException expected){}
         System.out.println("{\"selfTest\":\"passed\",\"assertions\":5,\"evidence\":\"android_bundle_and_async_model_not_binder_write\"}");
@@ -131,30 +132,23 @@ public final class ApplyCarrierOverride {
     }
     public static void main(String[] args) {
         try {
-            String profile="base",path=null; boolean status=false,transientOnly=false,selfTest=false;String cdma="keep";
+            String path=null; boolean status=false,selfTest=false;
             for(int i=0;i<args.length;i++) {
                 switch(args[i]) {
                     case "--policy": path=args[++i];break;
-                    case "--profile": profile=args[++i];break;
                     case "--status": status=true;break;
                     case "--self-test": selfTest=true;break;
-                    case "--transient": transientOnly=true;break;
-                    case "--cdma": cdma=args[++i];break;
-                    case "--disable-cdma": cdma="disable";break;
-                    case "--restore": throw new IllegalArgumentException("Full override clear is unsafe in a shared store. Use managed base policy; factory restore requires ownership audit.");
+                    case "--restore": throw new IllegalArgumentException("Full override clear is unsafe in a shared store. Use managed IMS policy; factory restore requires ownership audit.");
                     default: throw new IllegalArgumentException("Unknown argument: "+args[i]);
                 }
             }
-            if(path==null || !(profile.equals("base")||profile.equals("vcrbt")) ||
-                    !(cdma.equals("keep")||cdma.equals("disable")||cdma.equals("enable")))
-                throw new IllegalArgumentException("Required: --policy FILE --profile base|vcrbt [--cdma keep|disable|enable] [--status]");
+            if(path==null)throw new IllegalArgumentException("Required: --policy FILE [--status]");
             JSONObject policy=new JSONObject(new String(Files.readAllBytes(Paths.get(path)),"UTF-8"));
             int sdk=Integer.parseInt(prop("ro.build.version.sdk"));
             if(policy.getInt("schema")!=1 || !Compatibility.eligible(prop("ro.product.manufacturer"),prop("ro.product.brand"),prop("ro.product.model"),sdk))
                 throw new IllegalStateException("Unsupported Pixel/platform; no writes");
             if(selfTest){selfTest(policy);return;}
-            boolean full=Compatibility.fullIdentity(prop("ro.product.device"),prop("ro.build.display.id"),prop("gsm.version.baseband")) && fullFiles(policy);
-            if(!full && !cdma.equals("keep"))throw new IllegalStateException("CDMA changes forbidden in framework fallback");
+            boolean full=Compatibility.modemMatches(prop("gsm.version.baseband")) && fullFiles(policy);
             Object loader=service("carrier_config","com.android.internal.telephony.ICarrierConfigLoader$Stub");
             Object sub=service("isub","com.android.internal.telephony.ISub$Stub");
             Method writer=null;
@@ -170,25 +164,21 @@ public final class ApplyCarrierOverride {
                 if(!loaded(info))continue;
                 matches++;int sid=info.getSubscriptionId();PersistableBundle actual=read(loader,sid);
                 if(!CarrierConfigManager.isConfigForIdentifiedCarrier(actual))throw new IllegalStateException("Carrier config not identified");
-                boolean fullTarget=full && info.getCarrierId()==policy.getInt("carrier_id") &&
-                    policy.getString("mcc").equals(info.getMccString()) && policy.getString("mnc").equals(info.getMncString());
-                PersistableBundle desired;
-                if(fullTarget) {
-                    desired=fallback(actual);
-                    desired.putAll(bundle(policy.getJSONObject("common")));desired.putAll(bundle(policy.getJSONObject(profile)));
-                    if(!cdma.equals("keep"))desired.putBoolean("support_cdma_1x_voice_calls_bool",cdma.equals("enable"));
-                } else desired=fallback(actual);
+                // All subscriptions use the same typed, nonpersistent framework keys.
+                // Enhanced modem/PB capability is supplied only by independently gated mounts.
+                boolean fullTarget=full;
+                PersistableBundle desired=fallback(actual);
                 boolean wrote=false;
                 if(!status && !desired.isEmpty() && !equal(actual,desired)) {
                     stillTarget(sub,info);idle();
-                    // Fallback never stores portable guesses as persistent overrides across an OTA.
-                    writer.invoke(loader,sid,desired,fullTarget && !transientOnly);
+                    // Never add persistent overrides that could survive a modem/firmware change.
+                    writer.invoke(loader,sid,desired,false);
                     wrote=true;actual=await(()->read(loader,sid),desired,12000);
                 }
                 JSONObject row=new JSONObject();row.put("subId",sid);row.put("slot",info.getSimSlotIndex());
                 row.put("operator",operator);row.put("tier",fullTarget?"full":"framework-only");row.put("wrote",wrote);
-                row.put("observedAt",System.currentTimeMillis());row.put("requestedProfile",profile);
-                row.put("effectiveProfile",fullTarget?profile:"framework");row.put("managedKeyCount",desired.size());
+                row.put("observedAt",System.currentTimeMillis());
+                row.put("effectivePolicy",fullTarget?"ims":"framework");row.put("managedKeyCount",desired.size());
                 row.put("matchesPolicy",equal(actual,desired));row.put("evidence","effective_config_readback");
                 JSONObject values=new JSONObject();
                 for(String k:desired.keySet())if(actual!=null&&actual.containsKey(k)) {

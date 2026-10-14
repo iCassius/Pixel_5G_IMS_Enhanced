@@ -9,10 +9,6 @@ public final class Compatibility {
             "Pixel 10","Pixel 10 Pro","Pixel 10 Pro XL","Pixel 10 Pro Fold","Pixel 10a",
             "Pixel 11","Pixel 11 Pro","Pixel 11 Pro XL","Pixel 11 Pro Fold","Pixel 11a").contains(model);
     }
-    public static boolean fullIdentity(String device,String build,String baseband) {
-        return "mustang".equals(device) && "CP3A.260905.009".equals(build) &&
-            modemMatches(baseband);
-    }
     public static boolean modemMatches(String baseband) {
         if(baseband==null || baseband.isEmpty())return false;
         for(String modem:baseband.split(",",-1))
@@ -20,7 +16,7 @@ public final class Compatibility {
         return true;
     }
     public static String carrier(String mcc,String mnc) {
-        if(!"460".equals(mcc))return null;
+        if(!"460".equals(mcc) || mnc==null)return null;
         switch(mnc) {
             case "00":case "02":case "04":case "07":case "08":return "China Mobile";
             case "01":case "06":case "09":return "China Unicom";

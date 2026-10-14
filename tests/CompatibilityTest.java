@@ -10,20 +10,19 @@ public final class CompatibilityTest {
         check("old SDK",!Compatibility.eligible("Google","google","Pixel 6",30));
         check("wrong vendor",!Compatibility.eligible("Other","google","Pixel 10",36));
         check("wrong model",!Compatibility.eligible("Google","google","Pixel 5",36));
-        check("full exact",Compatibility.fullIdentity("mustang","CP3A.260905.009","g5400i-260604-260807-B-16035863"));
+        check("full exact",Compatibility.modemMatches("g5400i-260604-260807-B-16035863"));
         String known="g5400i-260604-260807-B-16035863";
         check("dual modem",Compatibility.modemMatches(known+","+known));
         check("trim modem fields",Compatibility.modemMatches(" "+known+", "+known+" "));
         check("empty modem field",!Compatibility.modemMatches(known+","));
         check("missing modem field",!Compatibility.modemMatches(","+known));
         for(String value:new String[]{"","unknown","g5400i-250605-250825-B-13984049","g5400i-260604-260807-B-16035863,new"})
-            check("wrong/empty modem",!Compatibility.fullIdentity("mustang","CP3A.260905.009",value));
-        check("other device",!Compatibility.fullIdentity("other","CP3A.260905.009","g5400i-260604-260807-B-16035863"));
-        check("OTA",!Compatibility.fullIdentity("mustang","new","g5400i-260604-260807-B-16035863"));
+            check("wrong/empty modem",!Compatibility.modemMatches(value));
         for(String mnc:new String[]{"00","02","04","07","08","01","06","09","03","05","11","15"})
             check("domestic "+mnc,Compatibility.carrier("460",mnc)!=null);
         for(String mcc:new String[]{"310","234","454","466",""})check("international "+mcc,Compatibility.carrier(mcc,"11")==null);
         check("unknown China PLMN",Compatibility.carrier("460","99")==null);
+        check("missing MNC",Compatibility.carrier("460",null)==null);
         Map<String,Object> current=new HashMap<>();
         current.put("carrier_volte_available_bool",false);current.put("carrier_wfc_ims_available_bool",false);
         current.put("vonr_enabled_bool",false);current.put("vonr_on_by_default_bool",false);current.put("vonr_setting_visibility_bool",false);
