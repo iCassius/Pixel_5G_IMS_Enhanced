@@ -53,7 +53,7 @@ echo "su $*" >> "$ACTIONS"
 echo '{"subscriptions":[],"targetCount":0}'
 ''')
     write(bin/'am','#!/bin/sh\necho "am $*" >> "$ACTIONS"\n[ "$AM_FAIL" != 1 ]\n')
-    write(mod/'update-repository','iCassius/PixelIMS\n')
+    write(mod/'update-repository','iCassius/Pixel_5G_IMS_Enhanced\n')
     write(mod/'action.sh',(mod/'action.sh').read_text(encoding='utf-8').replace('/system/bin/am',(bin/'am').as_posix()))
     env=dict(os.environ,INFO=info.as_posix(),ACTIONS=actions.as_posix())
     script=(mod/'post-fs-data.sh').read_text(encoding='utf-8').replace('/proc/self/mountinfo',info.as_posix()).replace('/dev/enable_pixel_5g',(work/'mirror').as_posix())
@@ -69,7 +69,7 @@ echo '{"subscriptions":[],"targetCount":0}'
     for p in bin.iterdir():p.chmod(0o755)
     return mod,env,actions,info
 def main():
-    repo='iCassius/PixelIMS';tag='v2.6.2-experimental'
+    repo='iCassius/Pixel_5G_IMS_Enhanced';tag='v2.6.2-experimental'
     prefix='https://github.com/'+repo+'/releases/download/'+tag+'/'
     metadata={'version':tag,'versionCode':28,'zipUrl':prefix+'test-framework.zip','changelog':prefix+'CHANGELOG.md'}
     validate_update(metadata,repo,tag,{'test-framework.zip','CHANGELOG.md'})
@@ -129,7 +129,7 @@ def main():
             if name=='browser unavailable':env['AM_FAIL']='1'
             if name=='invalid repository':write(mod/'update-repository','owner/repo;bad\n')
             result=execute(mod/'action.sh',env)
-            if name=='open releases':check(name,result.returncode==0 and 'https://github.com/iCassius/PixelIMS/releases' in actions.read_text() and 'su ' not in actions.read_text())
+            if name=='open releases':check(name,result.returncode==0 and 'https://github.com/iCassius/Pixel_5G_IMS_Enhanced/releases' in actions.read_text() and 'su ' not in actions.read_text())
             else:check(name,result.returncode!=0 and (name!='invalid repository' or not actions.read_text()))
     current=dict(line.split('=',1) for line in (ROOT/'module/module.prop').read_text(encoding='utf-8').splitlines() if '=' in line)
     archives=list((ROOT/'dist/release'/current['version']).glob('*.zip'))+list((ROOT/'dist/private'/current['version']).glob('*.zip'))

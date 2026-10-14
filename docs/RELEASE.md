@@ -1,6 +1,6 @@
 # GitHub Release 更新
 
-维护：iCassius。默认仓库目标 iCassius/PixelIMS；当前本地尚未配置 remote 或发布。
+维护：iCassius。仓库目标 iCassius/Pixel_5G_IMS_Enhanced；本地 origin 指向该地址，GitHub 仓库尚未创建或发布。
 如使用其他仓库，构建时传 `--update-repository owner/repository`，模块按钮与更新源一起生成。
 
 更新入口采用 KernelSU 官方 `module.prop updateJson` 和 `action.sh`，由管理器处理下载、安装与重启提示。

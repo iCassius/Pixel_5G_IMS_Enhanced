@@ -4,4 +4,4 @@ version=v2.6.2-experimental
 versionCode=28
 author=iCassius (original module: Sun_Dream)
 description=China IMS/VoNR/SA framework fallback; audited mustang-only modem patch. Original PixelVo5G Enabler for Global v1.1 by Sun_Dream.
-updateJson=https://raw.githubusercontent.com/iCassius/PixelIMS/updates/update-framework.json
+updateJson=https://raw.githubusercontent.com/iCassius/Pixel_5G_IMS_Enhanced/updates/update-framework.json

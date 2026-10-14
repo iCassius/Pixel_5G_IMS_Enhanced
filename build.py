@@ -8,7 +8,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--with-private-payload',action='store_true')
     parser.add_argument('--profile',choices=['base','vcrbt'],default='base')
-    parser.add_argument('--update-repository',default='iCassius/PixelIMS')
+    parser.add_argument('--update-repository',default='iCassius/Pixel_5G_IMS_Enhanced')
     args=parser.parse_args()
     if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',args.update_repository):
         parser.error('Expected GitHub owner/repository')
