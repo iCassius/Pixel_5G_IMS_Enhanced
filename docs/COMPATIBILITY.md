@@ -1,5 +1,14 @@
 # 参数与兼容边界
 
+## 来源与署名
+
+原模块为 PixelVo5G Enabler for Global / EnablePixel5G，备份版本 v1.1、versionCode 10，作者 Sun_Dream（Sun）。原描述为 Pixel56789TenVoLTE+VoNR for Global。
+原始属性包括 persist.dbg.volte_avail_ovr、persist.dbg.vt_avail_ovr、persist.dbg.wfc_avail_ovr、persist.rcs.supported。
+原始文本保留在 upstream/original_module.prop.txt 和 upstream/original_system.prop.txt；没有确认原作者的 GitHub 地址。
+
+本项目由 v2.5-mustang-experimental 工程派生，该阶段署名 Cassius & Antigravity。自 v2.6.0 起由 [iCassius](https://github.com/iCassius) 维护，保留 EnablePixel5G 模块 ID 以支持原位升级。
+来源备份未提供明确许可证，未重新标注为 MIT。厂商 PB／数据库等保留在本地 private/，公开框架包不包含这些载荷。
+
 维护：iCassius，2026-10-14。当前只保留 mustang / CP3A.260905.009 的历史设备证据；新 v2.6 尚未部署。
 
 ## 可以共用的候选

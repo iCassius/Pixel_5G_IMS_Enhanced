@@ -57,7 +57,7 @@ def main():
         write(mod/'policy.json',json.dumps(policy,ensure_ascii=False,indent=2)+'\n')
         write(mod/'full-files.tsv',''.join(path+' '+','.join(hashes)+'\n' for path,hashes in policy['full_files'].items()))
         write(mod/'profile.conf',args.profile+'\n')
-        shutil.copy2(ROOT/'NOTICE.md',mod/'NOTICE.md')
+        shutil.copy2(ROOT/'docs/COMPATIBILITY.md',mod/'COMPATIBILITY.md')
         manifest={'module_version':version,'maintainer':'iCassius','original_author':'Sun_Dream',
             'payload':'private-mustang' if args.with_private_payload else 'framework-only','outputs':{}}
         for path in sorted(mod.rglob('*')):

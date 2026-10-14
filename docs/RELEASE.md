@@ -1,6 +1,6 @@
 # GitHub Release 更新
 
-维护：iCassius。仓库目标 iCassius/Pixel_5G_IMS_Enhanced；本地 origin 指向该地址，GitHub 仓库尚未创建或发布。
+维护：iCassius。仓库：[iCassius/Pixel_5G_IMS_Enhanced](https://github.com/iCassius/Pixel_5G_IMS_Enhanced)，本地 origin 指向同一地址。
 如使用其他仓库，构建时传 `--update-repository owner/repository`，模块按钮与更新源一起生成。
 
 更新入口采用 KernelSU 官方 `module.prop updateJson` 和 `action.sh`，由管理器处理下载、安装与重启提示。
@@ -9,7 +9,7 @@
 每次发布先提高 module/module.prop 的 versionCode，修改 version 和 CHANGELOG，再构建。
 构建以 module.prop 为唯一版本来源，生成对应 ZIP、SHA256 和 update-<渠道>.json。
 Release 标签必须等于模块 version；上传对应 ZIP、update JSON、CHANGELOG.md 和 SHA256。
-发布附件 CHANGELOG.md 使用 docs/RELEASE_NOTES.md 的功能及实机记录，工程变更历史另保留在源码根目录。
+发布附件 CHANGELOG.md 使用 docs/RELEASE_NOTES.md 的功能及实机记录；来源说明保留在 docs/COMPATIBILITY.md。
 
 | 构建 | 更新描述文件 |
 |---|---|
@@ -23,7 +23,15 @@ GitHub Actions 仅在 v* 标签匹配 module.prop 且构建／检查通过后发
 更新源拒绝版本号倒退或同一 versionCode 指向不同版本；已匹配的重试不改写。
 私有基带渠道不自动发布；没有对应更新源文件时不会误装框架包。
 框架资产在 dist/release/<版本>/；基带资产在 dist/private/<版本>/，公开 workflow 只上传前者。
-当前不存在的仓库／Release 地址不代表更新已上线；尚未执行远端 CI。
+v2.6.2-experimental 已发布为预发布，远端构建与发布流程成功，框架更新源已上线。
 仓库私有时管理器无法匿名下载，需手动获取包或提供可公开访问的独立分发仓库。
 
 官方定义：https://kernelsu.org/guide/module.html 。安装升级后原有机型／基带守卫仍会运行。
+
+## 维护演进
+
+| 版本 | 主要变更 |
+|---|---|
+| v2.6.0 | 独立项目；国内四家框架兜底；基带及文件哈希守卫；私有载荷隔离；保留原作者 |
+| v2.6.1 | KernelSU 原生更新入口、Releases 按钮、独立更新渠道及统一版本生成 |
+| v2.6.2 | Pixel_5G_IMS_Enhanced 命名；Windows／Linux 构建；GitHub 发布与预发布更新源；修复 Profile 回写竞争 |

@@ -1,5 +1,12 @@
 # 发布前验证
 
+## GitHub 发布记录 — 2026-10-14
+
+仓库 iCassius/Pixel_5G_IMS_Enhanced 已公开，v2.6.2-experimental 预发布及四个附件已上传。
+发布流程 38579430764 的 build／release 均成功。下载包 SHA256 为 64ca90bae7ad6bce5f85f90a626b69c86620b18ef1355df2cbcde2d03417ff4e，与发布附件校验文件一致，内部 manifest 全部匹配。
+在线更新源与 Release JSON 一致，versionCode 28；发布正文及更新说明已同步为中文功能和历史实机记录。
+发布包来自 GitHub Linux 构建，下面的 Windows SHA256 属于本地发布前候选，不将两者写成同一包身份。
+
 ## v2.6.2 — 2026-10-14
 
 - 模块／README／安装包名称统一 Pixel_5G_IMS_Enhanced；版本 v2.6.2-experimental，versionCode 28。
