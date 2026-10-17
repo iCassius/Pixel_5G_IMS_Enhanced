@@ -1,6 +1,9 @@
 #!/system/bin/sh
-# iCassius: open releases; downloading/installing updates belongs to the root manager.
+# iCassius: default action checks status; the manager retains its separate update button.
 MODDIR=${0%/*}
+if [ "${1:-}" != releases ]; then
+    exec sh "$MODDIR/diagnose.sh"
+fi
 repository=$(cat "$MODDIR/update-repository" 2>/dev/null)
 case "$repository" in
     *[!a-zA-Z0-9_./-]*|'') echo '[ERROR] Invalid update repository'; exit 1;;

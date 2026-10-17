@@ -2,6 +2,11 @@ import java.util.*;
 
 /** Pure compatibility and fallback rules, maintained by iCassius. */
 public final class Compatibility {
+    public static boolean sameBootEvidence(String recordedBoot,String currentBoot,String recordedManifest,String currentManifest) {
+        return currentBoot!=null && currentBoot.matches("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}") &&
+            currentManifest!=null && currentManifest.matches("[0-9a-f]{64}") &&
+            currentBoot.equals(recordedBoot) && currentManifest.equals(recordedManifest);
+    }
     public static boolean eligible(String manufacturer, String brand, String model, int sdk) {
         if(!"Google".equals(manufacturer) || !"google".equals(brand) || sdk<31)return false;
         return Arrays.asList("Pixel 6","Pixel 6 Pro","Pixel 6a","Pixel 7","Pixel 7 Pro","Pixel 7a",

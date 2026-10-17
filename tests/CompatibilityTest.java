@@ -3,6 +3,14 @@ public final class CompatibilityTest {
     private static int count=0;
     private static void check(String name,boolean value){count++;if(!value)throw new AssertionError(name);}
     public static void main(String[] args) {
+        String boot="01234567-0123-4567-89ab-0123456789ab", digest=String.join("",Collections.nCopies(64,"a"));
+        check("same boot and release",Compatibility.sameBootEvidence(boot,boot,digest,digest));
+        check("old boot rejected",!Compatibility.sameBootEvidence("11234567-0123-4567-89ab-0123456789ab",boot,digest,digest));
+        check("old release rejected",!Compatibility.sameBootEvidence(boot,boot,"b"+digest.substring(1),digest));
+        check("empty evidence rejected",!Compatibility.sameBootEvidence("","","",""));
+        check("missing evidence rejected",!Compatibility.sameBootEvidence(null,null,null,null));
+        check("malformed boot rejected",!Compatibility.sameBootEvidence("bad","bad",digest,digest));
+        check("malformed digest rejected",!Compatibility.sameBootEvidence(boot,boot,"bad","bad"));
         for(int generation=6;generation<=11;generation++)
             check("Pixel family "+generation,Compatibility.eligible("Google","google","Pixel "+generation,36));
         check("Android17",Compatibility.eligible("Google","google","Pixel 10 Pro XL",37));

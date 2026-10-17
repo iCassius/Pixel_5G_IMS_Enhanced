@@ -115,6 +115,23 @@ public final class ApplyCarrierOverride {
             return files.length()==4;
         }catch(Exception unavailable){return false;}
     }
+    private static JSONObject bootObservation(String path,String manifest) throws Exception {
+        JSONObject unknown=new JSONObject();unknown.put("result","unknown");unknown.put("reason","record_unavailable");
+        // Historical boot observation only; never authorizes a mount or a framework write.
+        try {
+            if(path==null)return unknown;
+            JSONObject record=new JSONObject(new String(Files.readAllBytes(Paths.get(path)),"UTF-8"));
+            String boot=new String(Files.readAllBytes(Paths.get("/proc/sys/kernel/random/boot_id")),"UTF-8").trim();
+            if(record.optInt("schema")!=1 || !Compatibility.sameBootEvidence(record.optString("bootId"),boot,
+                    record.optString("manifestSha256"),manifest)) {
+                unknown.put("reason","record_stale_or_invalid");return unknown;
+            }
+            record.put("evidence","boot_script_record");
+            record.put("currentMountsVerified",false);
+            // Keep the boot nonce internal to validation, out of the public status.
+            record.remove("bootId");return record;
+        } catch(Exception unavailable){return unknown;}
+    }
     private static PersistableBundle fallback(PersistableBundle current) {
         Map<String,Object> values=new HashMap<>();for(String key:current.keySet())values.put(key,current.get(key));
         PersistableBundle result=new PersistableBundle();
@@ -132,10 +149,12 @@ public final class ApplyCarrierOverride {
     }
     public static void main(String[] args) {
         try {
-            String path=null; boolean status=false,selfTest=false;
+            String path=null,bootPath=null,manifest=null; boolean status=false,selfTest=false;
             for(int i=0;i<args.length;i++) {
                 switch(args[i]) {
                     case "--policy": path=args[++i];break;
+                    case "--boot-status": bootPath=args[++i];break;
+                    case "--manifest-sha256": manifest=args[++i];break;
                     case "--status": status=true;break;
                     case "--self-test": selfTest=true;break;
                     case "--restore": throw new IllegalArgumentException("Full override clear is unsafe in a shared store. Use managed IMS policy; factory restore requires ownership audit.");
@@ -148,7 +167,8 @@ public final class ApplyCarrierOverride {
             if(policy.getInt("schema")!=1 || !Compatibility.eligible(prop("ro.product.manufacturer"),prop("ro.product.brand"),prop("ro.product.model"),sdk))
                 throw new IllegalStateException("Unsupported Pixel/platform; no writes");
             if(selfTest){selfTest(policy);return;}
-            boolean full=Compatibility.modemMatches(prop("gsm.version.baseband")) && fullFiles(policy);
+            boolean modemMatches=Compatibility.modemMatches(prop("gsm.version.baseband"));
+            boolean filesMatch=fullFiles(policy);
             Object loader=service("carrier_config","com.android.internal.telephony.ICarrierConfigLoader$Stub");
             Object sub=service("isub","com.android.internal.telephony.ISub$Stub");
             Method writer=null;
@@ -166,7 +186,6 @@ public final class ApplyCarrierOverride {
                 if(!CarrierConfigManager.isConfigForIdentifiedCarrier(actual))throw new IllegalStateException("Carrier config not identified");
                 // All subscriptions use the same typed, nonpersistent framework keys.
                 // Enhanced modem/PB capability is supplied only by independently gated mounts.
-                boolean fullTarget=full;
                 PersistableBundle desired=fallback(actual);
                 boolean wrote=false;
                 if(!status && !desired.isEmpty() && !equal(actual,desired)) {
@@ -176,9 +195,9 @@ public final class ApplyCarrierOverride {
                     wrote=true;actual=await(()->read(loader,sid),desired,12000);
                 }
                 JSONObject row=new JSONObject();row.put("subId",sid);row.put("slot",info.getSimSlotIndex());
-                row.put("operator",operator);row.put("tier",fullTarget?"full":"framework-only");row.put("wrote",wrote);
+                row.put("operator",operator);row.put("tier","framework-only");row.put("wrote",wrote);
                 row.put("observedAt",System.currentTimeMillis());
-                row.put("effectivePolicy",fullTarget?"ims":"framework");row.put("managedKeyCount",desired.size());
+                row.put("effectivePolicy","framework");row.put("managedKeyCount",desired.size());
                 row.put("matchesPolicy",equal(actual,desired));row.put("evidence","effective_config_readback");
                 JSONObject values=new JSONObject();
                 for(String k:desired.keySet())if(actual!=null&&actual.containsKey(k)) {
@@ -186,9 +205,25 @@ public final class ApplyCarrierOverride {
                 }
                 row.put("values",values);reports.put(row);
             }
-            JSONObject result=new JSONObject();result.put("fullBaseline",full);result.put("subscriptions",reports);
+            JSONObject result=new JSONObject();result.put("statusSchema",2);result.put("subscriptions",reports);
+            JSONObject observation=new JSONObject();
+            observation.put("bootId",new String(Files.readAllBytes(Paths.get("/proc/sys/kernel/random/boot_id")),"UTF-8").trim());
+            observation.put("manifestSha256",manifest);
+            observation.put("checkedAtElapsedSeconds",SystemClock.elapsedRealtime()/1000);
+            observation.put("checkedAt",System.currentTimeMillis());
+            result.put("observation",observation);
+            JSONObject compatibility=new JSONObject();compatibility.put("modemMatches",modemMatches);
+            compatibility.put("allowedFilesMatch",filesMatch);compatibility.put("eligible",modemMatches && filesMatch);
+            compatibility.put("evidence","current_helper_namespace");result.put("compatibilityNow",compatibility);
+            JSONObject bootMount=bootObservation(bootPath,manifest);
+            if("verified_active_modem_partition".equals(bootMount.optString("modemEvidence"))) {
+                bootMount.put("runtimeModemMatches",modemMatches);
+                bootMount.put("requiresAttention",!modemMatches);
+            }
+            result.put("bootMount",bootMount);
+            result.put("consumerView","unknown");result.put("consumerLoad","unproven");result.put("businessValidation","not_tested");
             result.put("apiLevel",sdk);result.put("writeInterfaceAvailable",writer!=null);
-            result.put("modemBaseline",Compatibility.modemMatches(prop("gsm.version.baseband")));
+            result.put("modemBaseline",modemMatches);
             try {result.put("callIdle",callIdle());result.put("callStateInterfaceAvailable",true);}
             catch(Exception unavailable) {result.put("callStateInterfaceAvailable",false);}
             result.put("targetCount",matches);result.put("internationalPolicy","unchanged");System.out.println(result.toString());
