@@ -4,7 +4,7 @@
 
 **适配 Pixel 10 全系列，实验性支持 Pixel 9 系列；其他系列直接提示安装失败。**包含两代的标准版、Pro、Pro XL、Pro Fold 和 a 机型。要求 Google 原厂品牌及型号属性、Android API 31 或以上，没有 Android 版本上限。
 
-已发布版本：[v2.6.5](https://github.com/iCassius/Pixel_5G_IMS_Enhanced/releases/tag/v2.6.5)。本页说明当前开发候选 **v2.6.6-dev2** 的行为，已发布版本仍采用旧的适配条件。安装或更新后重启一次。
+当前版本：[v2.6.6](https://github.com/iCassius/Pixel_5G_IMS_Enhanced/releases/tag/v2.6.6)。安装或更新后重启一次。
 
 ## 提供的功能
 
@@ -23,4 +23,4 @@
 
 Pixel 10 全系列是当前适配范围，实机证据目前来自 Pixel 10 Pro XL；Pixel 9 系列标注为实验性支持。此前 v2.6.5 已在 Pixel 10 Pro XL／Android 17／中国电信确认早期挂载、配置读回及 5G SA／IMS over NR 注册，新候选和其他机型仍需对应验证。
 
-[适用范围与运行说明](docs/COMPATIBILITY.md) · [本次修复验证](docs/VALIDATION_v2.6.6-dev2.md) · [历史实机记录](docs/VALIDATION.md)
+[适用范围与运行说明](docs/COMPATIBILITY.md) · [本版验证记录](docs/VALIDATION_v2.6.6.md) · [历史实机记录](docs/VALIDATION.md)

@@ -1,6 +1,6 @@
 # 适用范围与运行条件
 
-v2.6.6-dev2 适配 Pixel 10 全系列，实验性支持 Pixel 9 系列；其他系列提示安装失败。维护者 iCassius，保留原作者 Sun_Dream 和原始来源。
+v2.6.6 适配 Pixel 10 全系列，实验性支持 Pixel 9 系列；其他系列提示安装失败。维护者 iCassius，保留原作者 Sun_Dream 和原始来源。
 
 ## 安装
 
@@ -40,4 +40,4 @@ vendor 和 product 两组独立检查，各组的两个目标文件必须存在�
 
 ## 验证范围
 
-此前 v2.6.5 在 Pixel 10 Pro XL 上验证过早期挂载、框架读回及 5G SA／IMS over NR 注册。本次候选改变了准入规则，旧结果不能替代新版或其他型号的安装、开机和通信验证。历史调查见 BOOT_MOUNT_RESEARCH.md、VALIDATION.md。
+此前 v2.6.5 在 Pixel 10 Pro XL 上验证过早期挂载、框架读回及 5G SA／IMS over NR 注册。本版改变了准入规则，旧结果不能替代新版或其他型号的安装、开机和通信验证。历史调查见 BOOT_MOUNT_RESEARCH.md、VALIDATION.md。
