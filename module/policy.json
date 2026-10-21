@@ -1,7 +1,6 @@
 {
   "schema": 1,
   "description": "IMS, VoNR and SA carrier policy. Video and VCRBT settings belong to PixelVcrbt.",
-  "baseband": "g5400i-260604-260807-B-16035863",
   "fallback": {
     "carrier_volte_available_bool": true,
     "vonr_enabled_bool": true,
@@ -12,5 +11,6 @@
       1,
       2
     ]
-  }
+  },
+  "compatibilityMode": "pixel9_10_experimental"
 }

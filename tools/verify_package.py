@@ -23,10 +23,12 @@ def verify(path,official=False):
         policy=json.loads(package.read('policy.json'))
         if manifest['module_version']!=props['version']:raise ValueError('Version mismatch')
         if 'profile.conf' in names or 'common' in policy or 'vcrbt' in policy:raise ValueError('Legacy video policy present')
-        full=manifest['payload']=='audited-mustang'
+        full=manifest['payload']=='experimental-pixel9-10'
         if official:
             if not full or path.name!='Pixel_5G_IMS_Enhanced-'+props['version']+'.zip':raise ValueError('Official package must include audited modem/PB payloads')
             if not props['updateJson'].endswith('/updates/update-framework.json'):raise ValueError('Wrong official update feed')
+        if policy.get('compatibilityMode')!='pixel9_10_experimental':raise ValueError('Wrong compatibility mode')
+        if 'early-modem.sh' in names:raise ValueError('Retired modem attestation shipped')
         if full:
             if set(policy['full_files'])!=set(PAYLOADS):raise ValueError('Incomplete file baseline')
             table={}

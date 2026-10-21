@@ -9,16 +9,8 @@ public final class Compatibility {
     }
     public static boolean eligible(String manufacturer, String brand, String model, int sdk) {
         if(!"Google".equals(manufacturer) || !"google".equals(brand) || sdk<31)return false;
-        return Arrays.asList("Pixel 6","Pixel 6 Pro","Pixel 6a","Pixel 7","Pixel 7 Pro","Pixel 7a",
-            "Pixel 8","Pixel 8 Pro","Pixel 8a","Pixel 9","Pixel 9 Pro","Pixel 9 Pro XL","Pixel 9 Pro Fold","Pixel 9a",
-            "Pixel 10","Pixel 10 Pro","Pixel 10 Pro XL","Pixel 10 Pro Fold","Pixel 10a",
-            "Pixel 11","Pixel 11 Pro","Pixel 11 Pro XL","Pixel 11 Pro Fold","Pixel 11a").contains(model);
-    }
-    public static boolean modemMatches(String baseband) {
-        if(baseband==null || baseband.isEmpty())return false;
-        for(String modem:baseband.split(",",-1))
-            if(!"g5400i-260604-260807-B-16035863".equals(modem.trim()))return false;
-        return true;
+        return Arrays.asList("Pixel 9","Pixel 9 Pro","Pixel 9 Pro XL","Pixel 9 Pro Fold","Pixel 9a",
+            "Pixel 10","Pixel 10 Pro","Pixel 10 Pro XL","Pixel 10 Pro Fold","Pixel 10a").contains(model);
     }
     public static String carrier(String mcc,String mnc) {
         if(!"460".equals(mcc) || mnc==null)return null;

@@ -19,7 +19,7 @@ trap 'exit 1' HUP INT TERM
 hash_for() {
     awk -v key="\"$1\"" '$0 ~ key {block=1;next} block && /"sha256"/ {gsub(/.*"sha256"[[:space:]]*:[[:space:]]*"/, "");gsub(/".*/, "");print;exit}' "$MODDIR/manifest.json"
 }
-for node in override.dex policy.json compatibility.sh early-modem.sh full-files.tsv; do
+for node in override.dex policy.json compatibility.sh full-files.tsv; do
     expected=$(hash_for "$node")
     actual=$(sha256sum "$MODDIR/$node" 2>/dev/null | awk '{print $1}')
     if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then echo "[ERROR] Integrity failure: $node" >&2; exit 1; fi

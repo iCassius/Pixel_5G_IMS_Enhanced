@@ -1,8 +1,8 @@
 #!/system/bin/sh
 # ==============================================================================
 # Pixel_5G_IMS_Enhanced - KernelSU / Magisk Early Boot Mount Script
-# Vendor profile: audited g5400i modem and vendor file hashes
-# Product profile: independently audited CarrierSettings file baseline
+# Experimental Pixel 9/10 family selection; payload integrity is still required
+# Vendor and CarrierSettings groups require readable targets and intact payloads
 # Note          : /dev mirror is an isolated workaround for namespace-specific unmounts
 # ==============================================================================
 
@@ -58,11 +58,11 @@ log_msg "[CONTEXT] namespace=$(readlink /proc/self/ns/mnt) ASH_STANDALONE=${ASH_
 write_boot_status || exit 1
 
 # ------------------------------------------------------------------------------
-# 1. 严格设备与固件基线守卫 (R4: 拒绝空属性与未验证 OTA 版本)
+# 1. Pixel 9/10 系列与开机阶段检查
 # ------------------------------------------------------------------------------
-# iCassius: identity and content gates must pass before preparing any mount.
+# Check module integrity, device family and boot phase before preparing mounts.
 # Reject corrupted guards/tables before sourcing or evaluating them.
-for node in compatibility.sh early-modem.sh full-files.tsv policy.json; do
+for node in compatibility.sh full-files.tsv policy.json; do
     expected=$(awk -v key="\"$node\"" 'index($0,key) {block=1;next} block && /"sha256"/ {gsub(/.*"sha256"[[:space:]]*:[[:space:]]*"/, "");gsub(/".*/, "");print;exit}' "$MANIFEST_FILE" 2>/dev/null)
     actual=$(sha256sum "$MODDIR/$node" 2>/dev/null | awk '{print $1}')
     if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
@@ -86,16 +86,16 @@ else
     PIXEL_COMPAT_REASON=file_table_unavailable
 fi
 MOUNT_IDENTITY_REASON=$PIXEL_COMPAT_REASON
-log_msg "[MODEM IDENTITY] reason=$MOUNT_IDENTITY_REASON evidence=$PIXEL_MODEM_EVIDENCE"
+log_msg "[MOUNT SELECTION] reason=$MOUNT_IDENTITY_REASON evidence=$PIXEL_MODEM_EVIDENCE"
 if [ "$MOUNT_IDENTITY_READY" -eq 1 ] && pixel_files_compatible vendor; then VENDOR_READY=1; fi
 VENDOR_REASON=$PIXEL_COMPAT_REASON
-log_msg "[VENDOR CHECK] reason=$VENDOR_REASON baseband='$pixel_baseband' target='${PIXEL_COMPAT_TARGET:-}' sha256='${PIXEL_COMPAT_HASH:-}'"
+log_msg "[VENDOR CHECK] reason=$VENDOR_REASON baseband='$(getprop gsm.version.baseband)' target='${PIXEL_COMPAT_TARGET:-}' sha256='${PIXEL_COMPAT_HASH:-}'"
 PIXEL_COMPAT_TARGET=""; PIXEL_COMPAT_HASH=""
 PIXEL_COMPAT_REASON=$MOUNT_IDENTITY_REASON
 if [ "$MOUNT_IDENTITY_READY" -eq 1 ] && pixel_files_compatible product; then PRODUCT_READY=1; fi
 PRODUCT_REASON=$PIXEL_COMPAT_REASON
-log_msg "[PRODUCT CHECK] reason=$PRODUCT_REASON baseband='$pixel_baseband' target='${PIXEL_COMPAT_TARGET:-}' sha256='${PIXEL_COMPAT_HASH:-}'"
-log_msg "[BASELINE] vendor=$VENDOR_READY product=$PRODUCT_READY"
+log_msg "[PRODUCT CHECK] reason=$PRODUCT_REASON baseband='$(getprop gsm.version.baseband)' target='${PIXEL_COMPAT_TARGET:-}' sha256='${PIXEL_COMPAT_HASH:-}'"
+log_msg "[SELECTED GROUPS] vendor=$VENDOR_READY product=$PRODUCT_READY"
 if [ "$VENDOR_READY" -eq 0 ] && [ "$PRODUCT_READY" -eq 0 ]; then
     BOOT_RESULT=skipped; BOOT_REASON=no_eligible_group
     log_msg "[FRAMEWORK ONLY] No eligible payload group; see modem/file reasons above. Zero mounts."

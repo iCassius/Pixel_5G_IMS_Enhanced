@@ -1,7 +1,7 @@
 id=EnablePixel5G
 name=Pixel_5G_IMS_Enhanced
-version=v2.6.5
-versionCode=36
+version=v2.6.6-dev1
+versionCode=37
 author=iCassius (original module: Sun_Dream)
-description=⏳ 等待本次开机自检；Pixel 国内 5G／IMS 增强。专用配置需核验基带与原文件；原作者 Sun_Dream，维护 iCassius。
+description=⏳ 等待本次开机自检；Pixel 9／10 系列 5G／IMS 实验适配。通信效果待实机验证；原作者 Sun_Dream，维护 iCassius。
 updateJson=https://raw.githubusercontent.com/iCassius/Pixel_5G_IMS_Enhanced/updates/update-framework.json

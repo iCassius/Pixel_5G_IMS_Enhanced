@@ -8,12 +8,12 @@ public final class HealthRules {
             checked>=0 && now>=checked && now-checked<=MAX_AGE_SECONDS;
     }
     public static String state(String phase,boolean framework,int targets,boolean bootValid,
-                               boolean modem,boolean mounts,boolean consumers,boolean integrity) {
+                               boolean platform,boolean mounts,boolean consumers,boolean integrity) {
         if(!integrity || "failed".equals(phase))return "error";
         if(!"checked".equals(phase))return "waiting";
         if(targets==0)return "waiting";
         if(!framework)return "warning";
-        return bootValid && modem && mounts && consumers ? "healthy" : "warning";
+        return bootValid && platform && mounts && consumers ? "healthy" : "warning";
     }
     private HealthRules(){}
 }

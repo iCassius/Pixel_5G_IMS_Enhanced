@@ -102,19 +102,6 @@ public final class ApplyCarrierOverride {
         if(!callIdle())
             throw new IllegalStateException("Call in progress; policy write deferred");
     }
-    private static boolean fullFiles(JSONObject policy) {
-        try {
-            JSONObject files=policy.getJSONObject("full_files");Iterator<String> names=files.keys();
-            while(names.hasNext()) {
-                String path=names.next();byte[] digest=MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(Paths.get(path)));
-                StringBuilder text=new StringBuilder();for(byte value:digest)text.append(String.format("%02x",value & 255));
-                JSONArray accepted=files.getJSONArray(path);boolean found=false;
-                for(int i=0;i<accepted.length();i++)if(text.toString().equals(accepted.getString(i)))found=true;
-                if(!found)return false;
-            }
-            return files.length()==4;
-        }catch(Exception unavailable){return false;}
-    }
     private static JSONObject bootObservation(String path,String manifest) throws Exception {
         JSONObject unknown=new JSONObject();unknown.put("result","unknown");unknown.put("reason","record_unavailable");
         // Historical boot observation only; never authorizes a mount or a framework write.
@@ -167,8 +154,7 @@ public final class ApplyCarrierOverride {
             if(policy.getInt("schema")!=1 || !Compatibility.eligible(prop("ro.product.manufacturer"),prop("ro.product.brand"),prop("ro.product.model"),sdk))
                 throw new IllegalStateException("Unsupported Pixel/platform; no writes");
             if(selfTest){selfTest(policy);return;}
-            boolean modemMatches=Compatibility.modemMatches(prop("gsm.version.baseband"));
-            boolean filesMatch=fullFiles(policy);
+            String observedBaseband=prop("gsm.version.baseband");
             Object loader=service("carrier_config","com.android.internal.telephony.ICarrierConfigLoader$Stub");
             Object sub=service("isub","com.android.internal.telephony.ISub$Stub");
             Method writer=null;
@@ -205,25 +191,20 @@ public final class ApplyCarrierOverride {
                 }
                 row.put("values",values);reports.put(row);
             }
-            JSONObject result=new JSONObject();result.put("statusSchema",2);result.put("subscriptions",reports);
+            JSONObject result=new JSONObject();result.put("statusSchema",3);result.put("subscriptions",reports);
             JSONObject observation=new JSONObject();
             observation.put("bootId",new String(Files.readAllBytes(Paths.get("/proc/sys/kernel/random/boot_id")),"UTF-8").trim());
             observation.put("manifestSha256",manifest);
             observation.put("checkedAtElapsedSeconds",SystemClock.elapsedRealtime()/1000);
             observation.put("checkedAt",System.currentTimeMillis());
             result.put("observation",observation);
-            JSONObject compatibility=new JSONObject();compatibility.put("modemMatches",modemMatches);
-            compatibility.put("allowedFilesMatch",filesMatch);compatibility.put("eligible",modemMatches && filesMatch);
+            JSONObject compatibility=new JSONObject();compatibility.put("mode","pixel9_10_experimental");
+            compatibility.put("platformEligible",true);compatibility.put("firmwareValidation","not_performed");compatibility.put("observedBaseband",observedBaseband);
             compatibility.put("evidence","current_helper_namespace");result.put("compatibilityNow",compatibility);
             JSONObject bootMount=bootObservation(bootPath,manifest);
-            if("verified_active_modem_partition".equals(bootMount.optString("modemEvidence"))) {
-                bootMount.put("runtimeModemMatches",modemMatches);
-                bootMount.put("requiresAttention",!modemMatches);
-            }
             result.put("bootMount",bootMount);
             result.put("consumerView","unknown");result.put("consumerLoad","unproven");result.put("businessValidation","not_tested");
             result.put("apiLevel",sdk);result.put("writeInterfaceAvailable",writer!=null);
-            result.put("modemBaseline",modemMatches);
             try {result.put("callIdle",callIdle());result.put("callStateInterfaceAvailable",true);}
             catch(Exception unavailable) {result.put("callStateInterfaceAvailable",false);}
             result.put("targetCount",matches);result.put("internationalPolicy","unchanged");System.out.println(result.toString());

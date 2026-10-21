@@ -115,7 +115,7 @@ public final class ModuleHealth {
     private static String card(String state,int mounts,int targets,int matched,String reason,long wall) {
         SimpleDateFormat format=new SimpleDateFormat("HH:mm",Locale.ROOT);format.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
         String time=format.format(new Date(wall));
-        if("healthy".equals(state))return "✅ 挂载 4/4 · 框架 "+matched+"/"+targets+" 卡通过 · "+time+" 已检查";
+        if("healthy".equals(state))return "✅ 挂载 4/4 · 框架 "+matched+"/"+targets+" 卡通过 · 适配待验证 · "+time;
         if("error".equals(state))return "❌ "+label(reason)+" · "+time;
         if("waiting".equals(state))return "⏳ "+label(reason)+" · "+time;
         return "⚠️ 挂载 "+mounts+"/4 · 框架 "+matched+"/"+targets+" 卡通过 · "+label(reason)+" · "+time;
@@ -147,11 +147,11 @@ public final class ModuleHealth {
         boolean bootValid=boot.equals(bootRecord.optString("bootId")) && manifestHash.equals(bootRecord.optString("manifestSha256")) && bootRecord.optInt("schema")==1;
         boolean bootPassed=bootValid && "verified_in_script_namespace".equals(bootRecord.optString("result"));
         boolean integrity=true;JSONArray integrityErrors=new JSONArray();
-        for(String node:new String[]{"override.dex","health.sh","service.sh","control.sh","compatibility.sh","early-modem.sh","policy.json","full-files.tsv","post-fs-data.sh","diagnose.sh","action.sh","module.prop"}) {
+        for(String node:new String[]{"override.dex","health.sh","service.sh","control.sh","compatibility.sh","policy.json","full-files.tsv","post-fs-data.sh","diagnose.sh","action.sh","module.prop"}) {
             try {if(!sha(mod.resolve(node)).equals(manifest.getJSONObject("outputs").getJSONObject(node).getString("sha256")))throw new IllegalStateException();}
             catch(Exception e){integrity=false;integrityErrors.put(node);}
         }
-        boolean modem=Compatibility.modemMatches(prop("gsm.version.baseband"));
+        boolean platform=Compatibility.eligible(prop("ro.product.manufacturer"),prop("ro.product.brand"),prop("ro.product.model"),Integer.parseInt(prop("ro.build.version.sdk")));
         boolean probe="probe".equals(phase),checked="checked".equals(phase) || probe;
         if(probe)phase="checked";
         JSONObject framework=checked?json(mod.resolve("status.json")):new JSONObject();
@@ -168,7 +168,7 @@ public final class ModuleHealth {
         if(boot.equals(previous.optString("bootId")) && manifestHash.equals(previous.optString("manifestSha256")))cache=previous.optJSONObject("hashCache");
         if(cache==null)cache=new JSONObject();JSONObject nextCache=new JSONObject();JSONArray processes=new JSONArray();
         Set<String> names=new HashSet<>();int mountCount=0;boolean consumersGood=true;
-        if(checked && integrity && modem) {
+        if(checked && integrity && platform) {
             try(DirectoryStream<Path> stream=Files.newDirectoryStream(Paths.get("/proc"))) {
                 for(Path proc:stream) {
                     if(!proc.getFileName().toString().matches("[0-9]+"))continue;
@@ -186,20 +186,17 @@ public final class ModuleHealth {
             }
         }
         JSONArray missing=new JSONArray();for(String name:CONSUMERS)if(!names.contains(name)){missing.put(name);consumersGood=false;}
-        String state=HealthRules.state(phase,frameworkGood,targets,bootPassed,modem,mountCount==4,consumersGood,integrity);
+        String state=HealthRules.state(phase,frameworkGood,targets,bootPassed,platform,mountCount==4,consumersGood,integrity);
         if(checked) {
             if(!integrity)reason="module_integrity_failed";
             else if(!bootValid)reason="boot_record_missing_or_stale";
             else if(!bootPassed)reason="boot_mount_not_completed";
-            else if(!modem)reason="modem_not_verified";
+            else if(!platform)reason="unsupported_platform";
             else if(targets==0)reason="no_ready_target_subscription";
             else if(!frameworkGood)reason="framework_readback_incomplete";
             else if(mountCount!=4)reason="mounts_incomplete";
             else if(!consumersGood)reason="consumer_views_incomplete";
             else reason="mounts_and_framework_verified";
-        }
-        if(checked && bootValid && !modem && "verified_in_script_namespace".equals(bootRecord.optString("result"))) {
-            state="error";reason="runtime_modem_conflict";
         }
         if(checked && bootValid && "rollback_failed".equals(bootRecord.optString("result"))) {
             state="error";reason="boot_rollback_failed";
@@ -209,7 +206,7 @@ public final class ModuleHealth {
         result.put("supervisorPid",System.getenv("PIXELIMS_SUPERVISOR_PID"));result.put("supervisorStart",System.getenv("PIXELIMS_SUPERVISOR_START"));
         result.put("state",state);result.put("phase",phase);result.put("reason",reason);result.put("bootRecordValid",bootValid);
         result.put("bootMountSucceeded",bootPassed);
-        result.put("integrityErrors",integrityErrors);result.put("runtimeModemMatches",modem);result.put("mountedFiles",mountCount);
+        result.put("integrityErrors",integrityErrors);result.put("platformEligible",platform);result.put("compatibilityMode","pixel9_10_experimental");result.put("firmwareValidation","not_performed");result.put("observedBaseband",prop("gsm.version.baseband"));result.put("mountedFiles",mountCount);
         result.put("bootResult",bootRecord.optString("result","unknown"));result.put("bootReason",bootRecord.optString("reason","record_unavailable"));
         result.put("bootGroups",bootRecord.optJSONObject("groups"));result.put("modemEvidence",bootRecord.optString("modemEvidence","unknown"));
         result.put("device",prop("ro.product.device"));result.put("build",prop("ro.build.display.id"));
