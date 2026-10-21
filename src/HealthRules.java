@@ -7,6 +7,9 @@ public final class HealthRules {
             manifest.matches("[0-9a-f]{64}") && manifest.equals(expectedManifest) &&
             checked>=0 && now>=checked && now-checked<=MAX_AGE_SECONDS;
     }
+    public static boolean fileVerified(int mountEntries,boolean matchesPayload,boolean sameBoot,String bootFileState) {
+        return matchesPayload && (mountEntries==1 || (mountEntries==0 && sameBoot && "already_identical".equals(bootFileState)));
+    }
     public static String state(String phase,boolean framework,int targets,boolean bootValid,
                                boolean platform,boolean mounts,boolean consumers,boolean integrity) {
         if(!integrity || "failed".equals(phase))return "error";

@@ -24,6 +24,12 @@ public final class HealthRulesTest {
         check("warning".equals(HealthRules.state("checked",true,1,true,false,true,true,true)));
         check("warning".equals(HealthRules.state("checked",true,1,true,true,false,true,true)));
         check("warning".equals(HealthRules.state("checked",true,1,true,true,true,false,true)));
+        check(HealthRules.fileVerified(1,true,false,""));
+        check(HealthRules.fileVerified(0,true,true,"already_identical"));
+        check(!HealthRules.fileVerified(0,true,false,"already_identical"));
+        check(!HealthRules.fileVerified(0,true,true,"mounted_verified"));
+        check(!HealthRules.fileVerified(0,false,true,"already_identical"));
+        check(!HealthRules.fileVerified(2,true,true,"already_identical"));
         System.out.println("Health assertions: "+n+" passed");
     }
 }

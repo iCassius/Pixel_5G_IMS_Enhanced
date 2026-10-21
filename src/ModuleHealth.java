@@ -62,9 +62,9 @@ public final class ModuleHealth {
         }catch(Exception unavailable){}
         return opened;
     }
-    private static JSONObject view(Path proc,JSONObject manifest,JSONObject cache,JSONObject nextCache)throws Exception {
+    private static JSONObject view(Path proc,JSONObject manifest,JSONObject cache,JSONObject nextCache,JSONObject bootFiles,boolean bootValid)throws Exception {
         JSONObject report=new JSONObject();String before=identity(proc);String mounts=text(proc.resolve("mountinfo"));
-        JSONArray files=new JSONArray();int passed=0;
+        JSONArray files=new JSONArray();int passed=0,mounted=0;
         for(int i=0;i<TARGETS.length;i++) {
             JSONObject f=new JSONObject();f.put("target",TARGETS[i]);boolean verified=false;
             try {
@@ -78,7 +78,9 @@ public final class ModuleHealth {
                 // Reject a file replaced during hashing, including changes hidden by the current PID.
                 if(!stamp.equals(before+":"+fileIdentity(p)))throw new IllegalStateException("file_changed_during_check");
                 String expected=manifest.getJSONObject("outputs").getJSONObject(PAYLOADS[i]).getString("sha256");
-                verified=count==1 && expected.equals(actual);
+                verified=HealthRules.fileVerified(count,expected.equals(actual),bootValid,bootFiles.optString(PAYLOADS[i]));
+                if(verified && count==1)mounted++;
+                f.put("verificationMode",verified?(count==0?"original_identical":"mounted_payload"):"unverified");
                 JSONObject entry=new JSONObject();entry.put("identity",stamp);entry.put("sha256",actual);entry.put("hashedAt",checked);nextCache.put(key,entry);
                 f.put("mountEntries",count);f.put("matchesPayload",expected.equals(actual));f.put("hashedAtElapsedSeconds",checked);
             } catch(Exception e){f.put("reason",e.getClass().getSimpleName());}
@@ -86,16 +88,17 @@ public final class ModuleHealth {
         }
         JSONArray opened=openTargets(proc,files);boolean stable=before.equals(identity(proc));report.put("pid",Integer.parseInt(proc.getFileName().toString()));
         report.put("processIdentity",before);report.put("stable",stable);report.put("files",files);
-        report.put("verifiedFiles",stable?passed:0);report.put("verified",stable && passed==4);
+        report.put("mountedFiles",stable?mounted:0);report.put("verifiedFiles",stable?passed:0);report.put("verified",stable && passed==4);
         report.put("openedTargets",stable?opened:new JSONArray());return report;
     }
     private static String label(String reason) {
         switch(reason) {
             case "boot_record_missing_or_stale":return "等待重启后验证";
-            case "modem_not_verified":return "当前基带尚未验证";
+            case "update_pending_reboot":return "更新已暂存，重启后生效";
+            case "mount_interrupted_reboot_required":return "挂载曾中断，请重启后复查";
             case "no_ready_target_subscription":return "等待目标 SIM 就绪";
             case "framework_readback_incomplete":return "框架配置未全部通过";
-            case "mounts_incomplete":return "挂载未全部通过";
+            case "mounts_incomplete":return "配置文件未全部通过";
             case "consumer_views_incomplete":return "相关进程尚未全部通过";
             case "module_integrity_failed":return "模块文件校验失败";
             case "framework_check_failed":return "框架检查失败，稍后重试";
@@ -106,7 +109,6 @@ public final class ModuleHealth {
             case "status_record_write_failed":return "无法保存检查结果";
             case "observation_expired":return "上次检查已过期";
             case "module_disabled_or_removed":return "模块已停用";
-            case "runtime_modem_conflict":return "基带与开机挂载条件不一致";
             case "boot_mount_not_completed":return "开机挂载未全部完成";
             case "boot_rollback_failed":return "开机挂载回滚失败";
             default:return "检查服务已停止";
@@ -115,10 +117,17 @@ public final class ModuleHealth {
     private static String card(String state,int mounts,int targets,int matched,String reason,long wall) {
         SimpleDateFormat format=new SimpleDateFormat("HH:mm",Locale.ROOT);format.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
         String time=format.format(new Date(wall));
-        if("healthy".equals(state))return "✅ 挂载 4/4 · 框架 "+matched+"/"+targets+" 卡通过 · 适配待验证 · "+time;
+        if("healthy".equals(state))return "✅ 文件 4/4 · 框架 "+matched+"/"+targets+" 卡通过 · "+time;
         if("error".equals(state))return "❌ "+label(reason)+" · "+time;
         if("waiting".equals(state))return "⏳ "+label(reason)+" · "+time;
-        return "⚠️ 挂载 "+mounts+"/4 · 框架 "+matched+"/"+targets+" 卡通过 · "+label(reason)+" · "+time;
+        return "⚠️ 文件 "+(mounts<0?"未检查":mounts+"/4")+" · 框架 "+matched+"/"+targets+" 卡通过 · "+label(reason)+" · "+time;
+    }
+    private static Map<String,String> outputs(JSONObject manifest) {
+        Map<String,String> result=new LinkedHashMap<>();JSONObject values=manifest.optJSONObject("outputs");
+        if(values!=null)for(Iterator<String> it=values.keys();it.hasNext();) {
+            String key=it.next();JSONObject value=values.optJSONObject(key);result.put(key,value==null?"":value.optString("sha256"));
+        }
+        return result;
     }
     private static boolean publish(String description)throws Exception {
         ProcessBuilder builder=new ProcessBuilder("/data/adb/ksud","module","config","set","--temp","override.description",description);
@@ -129,7 +138,7 @@ public final class ModuleHealth {
     }
     public static void main(String[] args)throws Exception {
         if(args.length!=3)throw new IllegalArgumentException("Expected module directory, phase, reason");
-        mod=Paths.get(args[0]);String phase=args[1],reason=args[2];now=SystemClock.elapsedRealtime()/1000;
+        mod=Paths.get(args[0]).toAbsolutePath().normalize();String phase=args[1],reason=args[2];now=SystemClock.elapsedRealtime()/1000;
         String boot=text(Paths.get("/proc/sys/kernel/random/boot_id")),manifestHash=sha(mod.resolve("manifest.json"));
         JSONObject previous=json(mod.resolve("health.json"));
         if("inspect".equals(phase) || "summary".equals(phase)) {
@@ -146,11 +155,19 @@ public final class ModuleHealth {
         JSONObject result=new JSONObject(),manifest=json(mod.resolve("manifest.json")),bootRecord=json(mod.resolve("boot-mount.json"));
         boolean bootValid=boot.equals(bootRecord.optString("bootId")) && manifestHash.equals(bootRecord.optString("manifestSha256")) && bootRecord.optInt("schema")==1;
         boolean bootPassed=bootValid && "verified_in_script_namespace".equals(bootRecord.optString("result"));
-        boolean integrity=true;JSONArray integrityErrors=new JSONArray();
-        for(String node:new String[]{"override.dex","health.sh","service.sh","control.sh","compatibility.sh","policy.json","full-files.tsv","post-fs-data.sh","diagnose.sh","action.sh","module.prop"}) {
-            try {if(!sha(mod.resolve(node)).equals(manifest.getJSONObject("outputs").getJSONObject(node).getString("sha256")))throw new IllegalStateException();}
-            catch(Exception e){integrity=false;integrityErrors.put(node);}
+        Map<String,String> currentOutputs=outputs(manifest);
+        List<String> integrityList=ModuleIntegrity.errors(mod,currentOutputs);
+        boolean pending=false;
+        if(integrityList.equals(Collections.singletonList("module.prop"))) {
+            Path staged=mod.getParent().getParent().resolve("modules_update").resolve(mod.getFileName());
+            try {
+                String stagedHash=sha(staged.resolve("manifest.json"));JSONObject next=json(staged.resolve("manifest.json"));
+                pending=ModuleIntegrity.pendingUpdate(mod,staged,currentOutputs,outputs(next),next.optString("module_version")) &&
+                    stagedHash.equals(sha(staged.resolve("manifest.json")));
+            }catch(Exception unavailable){pending=false;}
         }
+        boolean integrity=integrityList.isEmpty() || pending;
+        JSONArray integrityErrors=new JSONArray(pending?Collections.emptyList():integrityList);
         boolean platform=Compatibility.eligible(prop("ro.product.manufacturer"),prop("ro.product.brand"),prop("ro.product.model"),Integer.parseInt(prop("ro.build.version.sdk")));
         boolean probe="probe".equals(phase),checked="checked".equals(phase) || probe;
         if(probe)phase="checked";
@@ -167,8 +184,11 @@ public final class ModuleHealth {
         JSONObject cache=new JSONObject();
         if(boot.equals(previous.optString("bootId")) && manifestHash.equals(previous.optString("manifestSha256")))cache=previous.optJSONObject("hashCache");
         if(cache==null)cache=new JSONObject();JSONObject nextCache=new JSONObject();JSONArray processes=new JSONArray();
-        Set<String> names=new HashSet<>();int mountCount=0;boolean consumersGood=true;
-        if(checked && integrity && platform) {
+        Set<String> names=new HashSet<>();int mountCount=0,verifiedCount=-1;boolean consumersGood=true;
+        boolean mountChecked=checked && integrity && platform;
+        JSONObject bootFiles=bootRecord.optJSONObject("files");if(bootFiles==null)bootFiles=new JSONObject();
+        if(mountChecked) {
+            verifiedCount=0;
             try(DirectoryStream<Path> stream=Files.newDirectoryStream(Paths.get("/proc"))) {
                 for(Path proc:stream) {
                     if(!proc.getFileName().toString().matches("[0-9]+"))continue;
@@ -178,15 +198,15 @@ public final class ModuleHealth {
                     // init also has a vendor subcontext worker; only PID 1 proves the global view.
                     if("init".equals(name) && !"1".equals(proc.getFileName().toString()))continue;
                     names.add(name);JSONObject report;
-                    try{report=view(proc,manifest,cache,nextCache);}catch(Exception e){report=new JSONObject();report.put("verified",false);report.put("reason","process_unavailable_or_changed");}
+                    try{report=view(proc,manifest,cache,nextCache,bootFiles,bootPassed);}catch(Exception e){report=new JSONObject();report.put("verified",false);report.put("reason","process_unavailable_or_changed");}
                     report.put("name",name);processes.put(report);
-                    if("init".equals(name))mountCount=report.optInt("verifiedFiles");
+                    if("init".equals(name)){verifiedCount=report.optInt("verifiedFiles");mountCount=report.optInt("mountedFiles");}
                     if(!report.optBoolean("verified"))consumersGood=false;
                 }
             }
         }
-        JSONArray missing=new JSONArray();for(String name:CONSUMERS)if(!names.contains(name)){missing.put(name);consumersGood=false;}
-        String state=HealthRules.state(phase,frameworkGood,targets,bootPassed,platform,mountCount==4,consumersGood,integrity);
+        JSONArray missing=new JSONArray();for(String name:CONSUMERS)if(mountChecked && !names.contains(name)){missing.put(name);consumersGood=false;}
+        String state=HealthRules.state(phase,frameworkGood,targets,bootPassed,platform,verifiedCount==4,consumersGood,integrity);
         if(checked) {
             if(!integrity)reason="module_integrity_failed";
             else if(!bootValid)reason="boot_record_missing_or_stale";
@@ -194,28 +214,36 @@ public final class ModuleHealth {
             else if(!platform)reason="unsupported_platform";
             else if(targets==0)reason="no_ready_target_subscription";
             else if(!frameworkGood)reason="framework_readback_incomplete";
-            else if(mountCount!=4)reason="mounts_incomplete";
+            else if(verifiedCount!=4)reason="mounts_incomplete";
             else if(!consumersGood)reason="consumer_views_incomplete";
             else reason="mounts_and_framework_verified";
         }
         if(checked && bootValid && "rollback_failed".equals(bootRecord.optString("result"))) {
             state="error";reason="boot_rollback_failed";
         }
-        long wall=System.currentTimeMillis();result.put("schema",1);result.put("bootId",boot);result.put("manifestSha256",manifestHash);
+        boolean interrupted=bootValid && "interrupted".equals(bootRecord.optString("result"));
+        try {interrupted|=text(mod.resolve("mount-transaction")).startsWith(boot+"\n");}catch(Exception absent){}
+        if(checked && interrupted){state="error";reason="mount_interrupted_reboot_required";}
+        if(pending && "healthy".equals(state)){state="waiting";reason="update_pending_reboot";}
+        long wall=System.currentTimeMillis();result.put("schema",2);result.put("bootId",boot);result.put("manifestSha256",manifestHash);
         result.put("checkedAtElapsedSeconds",now);result.put("checkedAt",wall);result.put("validForSeconds",HealthRules.MAX_AGE_SECONDS);
         result.put("supervisorPid",System.getenv("PIXELIMS_SUPERVISOR_PID"));result.put("supervisorStart",System.getenv("PIXELIMS_SUPERVISOR_START"));
         result.put("state",state);result.put("phase",phase);result.put("reason",reason);result.put("bootRecordValid",bootValid);
         result.put("bootMountSucceeded",bootPassed);
-        result.put("integrityErrors",integrityErrors);result.put("platformEligible",platform);result.put("compatibilityMode","pixel9_10_experimental");result.put("firmwareValidation","not_performed");result.put("observedBaseband",prop("gsm.version.baseband"));result.put("mountedFiles",mountCount);
+        result.put("integrityErrors",integrityErrors);result.put("integrityDifferences",new JSONArray(integrityList));result.put("platformEligible",platform);result.put("compatibilityMode","pixel9_10_experimental");result.put("firmwareValidation","not_performed");result.put("observedBaseband",prop("gsm.version.baseband"));result.put("mountCheckPerformed",mountChecked);result.put("mountedFiles",mountChecked?mountCount:JSONObject.NULL);result.put("verifiedFiles",mountChecked?verifiedCount:JSONObject.NULL);result.put("updatePending",pending);
         result.put("bootResult",bootRecord.optString("result","unknown"));result.put("bootReason",bootRecord.optString("reason","record_unavailable"));
         result.put("bootGroups",bootRecord.optJSONObject("groups"));result.put("modemEvidence",bootRecord.optString("modemEvidence","unknown"));
         result.put("device",prop("ro.product.device"));result.put("build",prop("ro.build.display.id"));
         result.put("slot",prop("ro.boot.slot_suffix"));
         result.put("targetCount",targets);result.put("matchedSubscriptions",matched);result.put("frameworkReadbackVerified",checked && frameworkGood);
         result.put("frameworkObservationFresh",frameworkFresh);
-        result.put("consumerViewsVerified",consumersGood);result.put("processes",processes);result.put("missingProcesses",missing);result.put("hashCache",nextCache);
+        result.put("consumerViewsVerified",mountChecked?consumersGood:JSONObject.NULL);result.put("processes",processes);result.put("missingProcesses",missing);result.put("hashCache",nextCache);
         result.put("consumerLoad","parsing_and_application_unproven");result.put("businessValidation","not_tested");
-        String description=card(state,mountCount,targets,matched,reason,wall);result.put("description",description);
+        String description=card(state,verifiedCount,targets,matched,reason,wall);result.put("description",description);
+        String supportTier=platform?(prop("ro.product.model").startsWith("Pixel 9")?"experimental":"supported"):"unsupported";
+        result.put("supportTier",supportTier);
+        if("healthy".equals(state) && "experimental".equals(supportTier)){description+=" · Pixel 9 实验适配";result.put("description",description);}
+        if(pending && !"update_pending_reboot".equals(reason)){description+=" · 更新待重启";result.put("description",description);}
         // Save evidence before publishing. Card failures never erase the actual check result.
         atomic(mod.resolve("health.json"),result);
         boolean cardPublished=false;if(!probe)try{cardPublished=publish(description);}catch(Exception unsupported){}

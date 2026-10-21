@@ -16,7 +16,7 @@ def check(name,value):
     if not value:raise AssertionError(name)
 def execute(path,env,*args):
     directory=path.parent.parent/'bin';posix=directory.as_posix();posix='/'+posix[0].lower()+posix[2:] if os.name=='nt' else posix
-    return subprocess.run([str(BASH),'-c','export PATH="$1:$PATH"; shift; sh "$@"','fixtures',posix,path.as_posix(),*args],env=env,capture_output=True,text=True,encoding='utf-8',errors='replace')
+    return subprocess.run([str(BASH),'-c','export PATH="$1:$PATH"; shift; sh "$@"','fixtures',posix,path.as_posix(),*args],env=env,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=60)
 def fixture(work):
     mod=work/'module';shutil.copytree(ROOT/'module',mod)
     # Synthetic bytes suffice for mount control-flow tests; no proprietary data required.
@@ -52,6 +52,8 @@ echo "mount $tgt" >> "$ACTIONS"
 case "$tgt" in *target2) [ "$FAIL_SECOND" = 1 ] && exit 1;; esac
 cp "$tgt" "$tgt.original"; cp "$src" "$tgt"
 printf '1 0 0:0 / %s rw - tmpfs tmpfs rw\n' "$tgt" >> "$INFO"
+case "$tgt" in *target1) [ "$KILL_AFTER_FIRST" = 1 ] && kill -KILL "$PPID";; esac
+exit 0
 ''')
     write(bin/'umount','''#!/bin/sh
 echo "umount $1" >> "$ACTIONS"
@@ -69,6 +71,7 @@ echo '{"subscriptions":[],"targetCount":0}'
     write(mod/'action.sh',(mod/'action.sh').read_text(encoding='utf-8').replace('/system/bin/am',(bin/'am').as_posix()))
     env=dict(os.environ,INFO=info.as_posix(),ACTIONS=actions.as_posix())
     script=(mod/'post-fs-data.sh').read_text(encoding='utf-8').replace('/proc/self/mountinfo',info.as_posix()).replace('/dev/enable_pixel_5g',(work/'mirror').as_posix())
+    script=re.sub(r'^BOOT_ID=.*$', 'BOOT_ID=01234567-0123-4567-89ab-0123456789ab',script,flags=re.M)
     table=[]
     for i,relative in enumerate(['vendor_override/cfg.db','vendor_override/open_carrier_info.dat','product_override/others.pb','product_override/default.pb'],1):
         target=work/f'target{i}';target.write_bytes(b'original '+str(i).encode())
@@ -104,6 +107,10 @@ def main():
         subprocess.run([java_tool('javac'),'--release','8','-encoding','UTF-8','-d',temp,str(ROOT/'src/HealthRules.java'),str(ROOT/'tests/HealthRulesTest.java')],check=True)
         health=subprocess.run([java_tool('java'),'-cp',temp,'HealthRulesTest'],check=True,capture_output=True,text=True)
         print(health.stdout.strip());check('Java health assertions',health.returncode==0)
+    with tempfile.TemporaryDirectory(prefix='pixelims-integrity-test-') as temp:
+        subprocess.run([java_tool('javac'),'--release','8','-encoding','UTF-8','-d',temp,str(ROOT/'src/ModuleIntegrity.java'),str(ROOT/'tests/ModuleIntegrityTest.java')],check=True)
+        integrity=subprocess.run([java_tool('java'),'-cp',temp,'ModuleIntegrityTest',temp],check=True,capture_output=True,text=True)
+        print(integrity.stdout.strip());check('Java integrity regression assertions',True)
     policy=json.loads((ROOT/'module/policy.json').read_text(encoding='utf-8'))
     check('no video profiles',not {'base','vcrbt'}.intersection(policy))
     check('no video overrides',all(not any(word in key for word in ('video','imsvt','carrier_vt','crbt')) for group in ('fallback',) for key in policy[group]))
@@ -122,7 +129,7 @@ def main():
         'leading empty modem':{'TEST_MODEM':',g5400i-260604-260807-B-16035863'},
         'multiline modem':{'TEST_MODEM':'g5400i-260604-260807-B-16035863\ng5400i-260604-260807-B-16035863'},
         'missing target':{},'conflicting mount':{},'identical originals':{},'missing files':{},'corrupt mount gate':{},'changed ROM files':{},'changed product files':{},'corrupt payload':{},'partial mount failure':{'FAIL_SECOND':'1'},
-        'rollback failure':{'FAIL_SECOND':'1','FAIL_UNMOUNT':'1'},'reentry':{},'framework package':{}}
+        'rollback failure':{'FAIL_SECOND':'1','FAIL_UNMOUNT':'1'},'live mount lock':{},'ownerless mount lock':{},'stale mount lock':{},'killed mount':{'KILL_AFTER_FIRST':'1'},'reentry':{},'framework package':{}}
     for name,variables in scenarios.items():
         with tempfile.TemporaryDirectory(prefix='pixelims-shell-test-') as temp:
             work=pathlib.Path(temp);mod,env,actions,info=fixture(work);env.update(variables)
@@ -139,12 +146,32 @@ def main():
             if name=='framework package':
                 write(mod/'full-files.tsv','')
                 manifest=json.loads((mod/'manifest.json').read_text());manifest['outputs']['full-files.tsv']['sha256']=sha(mod/'full-files.tsv');write(mod/'manifest.json',json.dumps(manifest,indent=2))
+            if name=='stale mount lock':
+                lock=work/'mirror_mount.lock';lock.mkdir();write(lock/'pid','99999999\n');write(lock/'start','old\n')
+            if name in ('live mount lock','ownerless mount lock'):
+                lock=work/'mirror_mount.lock';lock.mkdir()
+                if name=='live mount lock':
+                    wrapper=mod/'live-lock-probe.sh'
+                    write(wrapper,'printf "%s\\n" "$$" > "'+lock.as_posix()+'/pid"; sed \'s/.*) //\' "/proc/$$/stat" | awk \'{print $20}\' > "'+lock.as_posix()+'/start"; sh "'+(mod/'post-fs-data.sh').as_posix()+'"\n')
+                    result=execute(wrapper,env)
+                else:result=execute(mod/'post-fs-data.sh',env)
+                check(name+' retained',result.returncode==75 and lock.exists() and not actions.read_text())
+                continue
             result=execute(mod/'post-fs-data.sh',env)
+            if name=='killed mount':
+                check('killed mount intent retained',(mod/'mount-transaction').exists() and bool(info.read_text()))
+                saved_log=(mod/'mount.log').read_text()
+                second=execute(mod/'post-fs-data.sh',env)
+                check('interrupted log preserved',(mod/'mount.log').read_text().startswith(saved_log))
+                stopped=json.loads((mod/'boot-mount.json').read_text())
+                check('killed mount requires reboot',second.returncode!=0 and stopped['result']=='interrupted' and actions.read_text().count('mount ')==1)
+                continue
             observation=json.loads((mod/'boot-mount.json').read_text())
             check(name+' boot record',observation['schema']==1 and observation['stage']=='post-fs-data' and
                 observation['manifestSha256']==sha(mod/'manifest.json'))
             check(name+' mount lock released',not (work/'mirror_mount.lock').exists())
-            if name in ('full','reentry','API37','future API','dual modem','OTA','Pixel9','baseband mismatch','empty baseband','old report baseband','mixed modem','trailing empty modem','leading empty modem','multiline modem','changed ROM files','changed product files'):
+            if name!='rollback failure':check(name+' no unfinished transaction',not (mod/'mount-transaction').exists())
+            if name in ('full','stale mount lock','reentry','API37','future API','dual modem','OTA','Pixel9','baseband mismatch','empty baseband','old report baseband','mixed modem','trailing empty modem','leading empty modem','multiline modem','changed ROM files','changed product files'):
                 check(name+' mounts',result.returncode==0 and actions.read_text().count('mount ')==4)
                 check(name+' per-file evidence',observation['result']=='verified_in_script_namespace' and
                     set(observation['files'].values())=={'mounted_verified'})

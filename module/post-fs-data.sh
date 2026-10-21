@@ -14,9 +14,31 @@ LOGFILE="$MODDIR/mount.log"
 MANIFEST_FILE="$MODDIR/manifest.json"
 MIRROR_DIR=""
 MOUNTED_LIST=""
-# iCassius: observations describe this boot, never authority to bypass firmware gates.
+# Serialize early mounting; a stale owner can be reclaimed without deleting a live lock.
 MOUNT_LOCK=/dev/enable_pixel_5g_mount.lock
-mkdir "$MOUNT_LOCK" 2>/dev/null || exit 75
+start_time() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | awk '{print $20}'; }
+RECLAIM_HELD=0
+if ! mkdir "$MOUNT_LOCK" 2>/dev/null; then
+    # Only one reclaimer may inspect/remove the old lock at a time.
+    mkdir "$MOUNT_LOCK.reclaim" 2>/dev/null || exit 75
+    RECLAIM_HELD=1
+    owner=$(cat "$MOUNT_LOCK/pid" 2>/dev/null)
+    saved=$(cat "$MOUNT_LOCK/start" 2>/dev/null)
+    case "$owner" in
+        ''|*[!0-9]*) rmdir "$MOUNT_LOCK.reclaim"; exit 75;;
+    esac
+    current=$(start_time "$owner")
+    if kill -0 "$owner" 2>/dev/null && { [ -z "$saved" ] || [ -z "$current" ] || [ "$saved" = "$current" ]; }; then
+        rmdir "$MOUNT_LOCK.reclaim"; exit 75
+    fi
+    rm -f "$MOUNT_LOCK/pid" "$MOUNT_LOCK/start"
+    rmdir "$MOUNT_LOCK" 2>/dev/null || { rmdir "$MOUNT_LOCK.reclaim"; exit 75; }
+    mkdir "$MOUNT_LOCK" 2>/dev/null || { rmdir "$MOUNT_LOCK.reclaim"; exit 75; }
+fi
+printf '%s\n' "$$" > "$MOUNT_LOCK/pid"
+start_time "$$" > "$MOUNT_LOCK/start"
+[ "$RECLAIM_HELD" -eq 0 ] || rmdir "$MOUNT_LOCK.reclaim" 2>/dev/null
+TRANSACTION="$MODDIR/mount-transaction"
 BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
 case "$BOOT_ID" in *[!0-9a-f-]*) BOOT_ID="";; esac
 MANIFEST_SHA=$(sha256sum "$MANIFEST_FILE" 2>/dev/null | awk '{print $1}')
@@ -44,6 +66,7 @@ finish_boot() {
     boot_exit=$?
     trap - EXIT
     write_boot_status || { log_msg '[ERROR] Could not persist boot mount observation.'; boot_exit=1; }
+    rm -f "$MOUNT_LOCK/pid" "$MOUNT_LOCK/start"
     rmdir "$MOUNT_LOCK" 2>/dev/null
     exit "$boot_exit"
 }
@@ -53,6 +76,11 @@ log_msg() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [uptime=$(cut -d' ' -f1 /proc/uptime)] $1" >> "$LOGFILE"
 }
 
+if [ -f "$TRANSACTION" ] && [ -n "$BOOT_ID" ] && [ "$(head -n 1 "$TRANSACTION" 2>/dev/null)" = "$BOOT_ID" ]; then
+    BOOT_RESULT=interrupted; BOOT_REASON=mount_interrupted_reboot_required
+    log_msg '[ABORT] An unfinished mount transaction belongs to this boot; reboot required.'
+    exit 1
+fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] === EnablePixel5G v2.6 post-fs-data started ===" > "$LOGFILE"
 log_msg "[CONTEXT] namespace=$(readlink /proc/self/ns/mnt) ASH_STANDALONE=${ASH_STANDALONE:-unset} KSU_VER=${KSU_VER:-unset}"
 write_boot_status || exit 1
@@ -202,6 +230,7 @@ rollback_session_mounts() {
     fi
 
     if [ "$ROLLBACK_OK" -eq 1 ]; then
+        rm -f "$TRANSACTION"
         log_msg "[ROLLBACK] Session rollback completed cleanly."
     else
         BOOT_RESULT=rollback_failed; BOOT_REASON=rollback_failed
@@ -335,6 +364,9 @@ mount_node() {
     fi
 }
 
+# Persist the intent BEFORE the first bind. SIGKILL cannot run shell traps.
+printf '%s\n%s\n' "$BOOT_ID" "$MIRROR_DIR" > "$TRANSACTION.new" &&
+    mv "$TRANSACTION.new" "$TRANSACTION" || { BOOT_REASON=transaction_record_write_failed; exit 1; }
 MOUNT_OK=1
 if [ "$VENDOR_READY" -eq 1 ]; then
     mount_node "$MIRROR_SRC_1" "$TGT_1" && mount_node "$MIRROR_SRC_2" "$TGT_2" || MOUNT_OK=0
@@ -352,4 +384,7 @@ if [ -z "$MOUNTED_LIST" ]; then
 fi
 log_msg "=== EnablePixel5G v2.6 post-fs-data completed and verified with /dev mirror ==="
 BOOT_RESULT=verified_in_script_namespace; BOOT_REASON=completed
+# Commit the boot record before removing the intent; interrupted commits stay detectable.
+write_boot_status || { BOOT_RESULT=interrupted; BOOT_REASON=transaction_record_write_failed; exit 1; }
+rm -f "$TRANSACTION"
 exit 0
